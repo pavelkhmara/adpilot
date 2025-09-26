@@ -50,6 +50,25 @@ interface AuditEntry {
   title: string;
 }
 
+type DemoSettings = {
+  minSpendForPause: number;
+  lowRoasThreshold: number;
+  highRoasThreshold: number;
+  minConversionsForScale: number;
+  fatigueFreq: number;
+  lowCtrThreshold: number;
+};
+
+const DEFAULT_SETTINGS: DemoSettings = {
+  minSpendForPause: 1000,
+  lowRoasThreshold: 1.5,
+  highRoasThreshold: 3.0,
+  minConversionsForScale: 50,
+  fatigueFreq: 2.5,
+  lowCtrThreshold: 0.02,
+};
+
+
 
 // --- Mock data --------------------------------------------------------------
 const MOCK_CAMPAIGNS: Campaign[] = [
@@ -111,9 +130,10 @@ const MOCK_CAMPAIGNS: Campaign[] = [
   },
 ];
 
-function computeDerived(c: Campaign): DerivedCampaign {
+function computeDerived(c: Campaign, s: DemoSettings = DEFAULT_SETTINGS): DerivedCampaign {
   const roas = c.revenue && c.spend ? c.revenue / c.spend : 0;
   const cpa = c.conversions ? c.spend / c.conversions : null;
+
   let recommendation: Recommendation | null = null;
 
   // Simple heuristic rules for demo
@@ -125,27 +145,27 @@ function computeDerived(c: Campaign): DerivedCampaign {
       action: null,
       risk: "Premature changes will reset learning.",
     };
-  } else if (roas < 1.5 && c.spend > 1000 && c.impressions > 50000) {
+  } else if (roas < s.lowRoasThreshold && c.spend >= s.minSpendForPause && c.impressions > 50_000) {
     recommendation = {
       type: "pause",
-      title: "Check/Pause", // или "Review/Pause"
-      reason: "High spending with low ROAS",
+      title: "Check/Pause", 
+      reason: `High spending (≥ ${s.minSpendForPause}) with ROAS < ${s.lowRoasThreshold}`,
       action: { kind: "pause_campaign" },
       risk: "Possible conversion underreporting (lag).",
     };
-  } else if (roas >= 3 && c.conversions >= 50) {
+  } else if (roas >= s.highRoasThreshold && c.conversions >= s.minConversionsForScale) {
     recommendation = {
       type: "scale",
       title: "+15% to budget",
-      reason: "Consistently high ROAS and sufficient conversion volume",
+      reason: `Consistently ROAS ≥ ${s.highRoasThreshold} and conversion volume ≥ ${s.minConversionsForScale}`,
       action: { kind: "increase_budget", by: 0.15 },
       risk: "Monitor stability for 48 hours.",
     };
-  } else if (c.channel === "Meta Ads" && c.frequency > 2.5 && c.ctr < 0.02) {
+  } else if (c.channel === "Meta Ads" && c.frequency > s.fatigueFreq && c.ctr < s.lowCtrThreshold) {
     recommendation = {
       type: "creative",
       title: "Change creatives / reduce frequency",
-      reason: "High frequency and declining CTR - signs of ad fatigue",
+      reason: `High frequency (${c.frequency.toFixed(1)}) and declining CTR (< ${(s.lowCtrThreshold*100).toFixed(1)}%) - signs of ad fatigue`,
       action: { kind: "rotate_creatives" },
       risk: "Short-term performance drop during testing.",
     };
@@ -223,6 +243,22 @@ function DashboardInner() {
     const [audit, setAudit] = useState<AuditEntry[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [settings, setSettings] = useState<DemoSettings>(() => {
+      if (typeof window === "undefined") return DEFAULT_SETTINGS;
+      try {
+        const raw = localStorage.getItem("adpilot_demo_settings");
+        return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+      } catch {
+        return DEFAULT_SETTINGS;
+      }
+    });
+    const [settingsOpen, setSettingsOpen] = useState(false);
+
+    useEffect(() => {
+      try {
+        localStorage.setItem("adpilot_demo_settings", JSON.stringify(settings));
+      } catch {}
+    }, [settings]);
 
 
     const urlState = useMemo(() => {
@@ -263,7 +299,10 @@ function DashboardInner() {
 
 
 
-  const data = useMemo<DerivedCampaign[]>(() => MOCK_CAMPAIGNS.map(computeDerived), []);
+  const data = useMemo<DerivedCampaign[]>(
+    () => MOCK_CAMPAIGNS.map((c) => computeDerived(c, settings)),
+    [settings]
+  );
 
   const filtered = useMemo(
     () => data.filter(c => (channelFilter === "All" || c.channel === channelFilter) &&
@@ -384,6 +423,13 @@ function DashboardInner() {
             </button>
             <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
                 Export CSV
+            </button>
+            <button
+              className="px-3 py-1.5 rounded-xl border text-sm"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open demo settings"
+            >
+              ⚙️
             </button>
           </div>
         </div>
@@ -643,6 +689,98 @@ function DashboardInner() {
           </div>
         </div>
       )}
+      {settingsOpen && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-xl font-semibold">Demo settings</div>
+              <button className="text-gray-400" onClick={() => setSettingsOpen(false)}>✕</button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">Min. spend for «pause», $</span>
+                <input
+                  type="number"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.minSpendForPause}
+                  onChange={(e) => setSettings(s => ({ ...s, minSpendForPause: Number(e.target.value) }))}
+                  min={0}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">Low ROAS Threshold</span>
+                <input
+                  type="number" step="0.1"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.lowRoasThreshold}
+                  onChange={(e) => setSettings(s => ({ ...s, lowRoasThreshold: Number(e.target.value) }))}
+                  min={0}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">High ROAS Threshold</span>
+                <input
+                  type="number" step="0.1"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.highRoasThreshold}
+                  onChange={(e) => setSettings(s => ({ ...s, highRoasThreshold: Number(e.target.value) }))}
+                  min={0}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">Min. conversions for «scale»</span>
+                <input
+                  type="number"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.minConversionsForScale}
+                  onChange={(e) => setSettings(s => ({ ...s, minConversionsForScale: Number(e.target.value) }))}
+                  min={0}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">Fatigue Frequency (Meta)</span>
+                <input
+                  type="number" step="0.1"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.fatigueFreq}
+                  onChange={(e) => setSettings(s => ({ ...s, fatigueFreq: Number(e.target.value) }))}
+                  min={0}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-600">Low CTR Threshold (ratio)</span>
+                <input
+                  type="number" step="0.001"
+                  className="px-3 py-2 rounded-xl border"
+                  value={settings.lowCtrThreshold}
+                  onChange={(e) => setSettings(s => ({ ...s, lowCtrThreshold: Number(e.target.value) }))}
+                  min={0} max={1}
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between">
+              <button
+                className="text-sm text-gray-500 underline"
+                onClick={() => setSettings(DEFAULT_SETTINGS)}
+              >
+                Reset to default values
+              </button>
+              <div className="flex items-center gap-2">
+                <button className="px-3 py-2 rounded-xl border" onClick={() => setSettingsOpen(false)}>Close</button>
+                <button
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
