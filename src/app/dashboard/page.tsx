@@ -53,6 +53,16 @@ type DemoSettings = {
   minConversionsForScale: number;
   fatigueFreq: number;
   lowCtrThreshold: number;
+  columns?: {
+    spend: boolean;
+    revenue: boolean;
+    roas: boolean;
+    cpa: boolean;
+    ctr: boolean;
+    recommendation: boolean;
+    actions: boolean;
+  };
+  compact?: boolean;
 };
 
 const DEFAULT_SETTINGS: DemoSettings = {
@@ -62,6 +72,16 @@ const DEFAULT_SETTINGS: DemoSettings = {
   minConversionsForScale: 50,
   fatigueFreq: 2.5,
   lowCtrThreshold: 0.02,
+  columns: {
+    spend: true,
+    revenue: true,
+    roas: true,
+    cpa: true,
+    ctr: true,
+    recommendation: true,
+    actions: true,
+  },
+  compact: false,
 };
 
 interface ActionPayload {
@@ -254,6 +274,8 @@ function DashboardInner() {
 
     type Toast = { id: string; text: string };
     const [toasts, setToasts] = useState<Toast[]>([]);
+    const rowPad = settings.compact ? "py-1.5" : "py-3";
+    const cellBase = `p-3 ${settings.compact ? "py-1.5" : ""}`;
 
 
 
@@ -652,90 +674,108 @@ function DashboardInner() {
 
         {/* Table */}
         <section className="rounded-2xl overflow-hidden border bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3">Channel</th>
-                <th className="text-left p-3">Campaign</th>
-                <th className="text-right p-3">
-                    <button onClick={() => toggleSort("spend")} className="hover:underline">
-                        Spend {sortBy === "spend" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                </th>
-                <th className="text-right p-3">
-                    <button onClick={() => toggleSort("revenue")} className="hover:underline">
-                        Revenue {sortBy === "revenue" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                </th>
-                <th className="text-right p-3">
-                    <button onClick={() => toggleSort("roas")} className="hover:underline">
-                        ROAS {sortBy === "roas" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                </th>
-                <th className="text-right p-3">
-                    <button onClick={() => toggleSort("cpa")} className="hover:underline">
-                        CPA {sortBy === "cpa" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                </th>
-                <th className="text-right p-3">
-                    <button onClick={() => toggleSort("ctr")} className="hover:underline">
-                        CTR {sortBy === "ctr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                    </button>
-                </th>
-                <th className="text-left p-3">Recommendation</th>
-                <th className="text-right p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-                {refreshing ? (
-                    <>
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    </>
-                ) : sorted.length === 0 ? (
-                    <tr>
-                    <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
-                        No results found for current filters. Reset filters or modify your search.
-                    </td>
-                    </tr>
-                ) : (
-                    sorted.map((c) => (
-                    <tr key={c.id} className="border-t">
-                        <td className="p-3 whitespace-nowrap">{c.channel}</td>
-                        <td className="p-3">
-                        <div className="font-medium">{c.name}</div>
-                        <div className="text-xs text-gray-500">{c.status}</div>
-                        </td>
-                        <td className="p-3 text-right">€{c.spend.toFixed(2)}</td>
-                        <td className="p-3 text-right">€{c.revenue.toFixed(2)}</td>
-                        <td className="p-3 text-right">{c.roas.toFixed(2)}</td>
-                        <td className="p-3 text-right">{c.cpa ? `€${c.cpa.toFixed(2)}` : "—"}</td>
-                        <td className="p-3 text-right">{(c.ctr * 100).toFixed(2)}%</td>
-                        <td className="p-3"><RecommendationPill rec={c.recommendation} /></td>
-                        <td className="p-3 text-right">
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => { 
-                                  setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
-                                }}
-                                className="px-3 py-1.5 rounded-xl border"
-                            >
-                            More
-                            </button>
-                            {!readOnly && (
-                              <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white">
-                              Generate action
-                              </button>
-                            )}
-                        </div>
-                        </td>
-                    </tr>
-                    ))
-                )}
-                </tbody>
-          </table>
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className={`text-left ${cellBase}`}>Channel</th>
+                  <th className={`text-left ${cellBase}`}>Campaign</th>
+                  {settings.columns?.spend && (
+                    <th className={`text-right ${cellBase}`}>
+                        <button onClick={() => toggleSort("spend")} className="hover:underline">
+                            Spend {sortBy === "spend" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                    </th>
+                  )}
+                  {settings.columns?.revenue && (
+                    <th className={`text-right ${cellBase}`}>
+                        <button onClick={() => toggleSort("revenue")} className="hover:underline">
+                            Revenue {sortBy === "revenue" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                    </th>
+                  )}
+                  {settings.columns?.roas && (
+                    <th className={`text-right ${cellBase}`}>
+                        <button onClick={() => toggleSort("roas")} className="hover:underline">
+                            ROAS {sortBy === "roas" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                    </th>
+                  )}
+                  {settings.columns?.cpa && (
+                    <th className={`text-right ${cellBase}`}>
+                        <button onClick={() => toggleSort("cpa")} className="hover:underline">
+                            CPA {sortBy === "cpa" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                    </th>
+                  )}
+                  {settings.columns?.ctr && (
+                    <th className={`text-right ${cellBase}`}>
+                        <button onClick={() => toggleSort("ctr")} className="hover:underline">
+                            CTR {sortBy === "ctr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                  </th>
+                  )}
+                  {settings.columns?.recommendation && (
+                    <th className={`text-left ${cellBase}`}>Recommendation</th>
+                  )}
+                  {settings.columns?.actions && (
+                    <th className={`text-right ${cellBase}`}>Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                  {refreshing ? (
+                      <>
+                      <SkeletonRow />
+                      <SkeletonRow />
+                      <SkeletonRow />
+                      <SkeletonRow />
+                      <SkeletonRow />
+                      </>
+                  ) : sorted.length === 0 ? (
+                      <tr>
+                      <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
+                          No results found for current filters. Reset filters or modify your search.
+                      </td>
+                      </tr>
+                  ) : (
+                      sorted.map((c) => (
+                      <tr key={c.id} className="border-t">
+                          <td className={`${cellBase} whitespace-nowrap`}>{c.channel}</td>
+                          <td className={cellBase}>
+                          <div className="font-medium">{c.name}</div>
+                          <div className="text-xs text-gray-500">{c.status}</div>
+                          </td>
+                          {settings.columns?.spend && <td className={`${cellBase} text-right`}>${c.spend.toFixed(2)}</td>}
+                          {settings.columns?.revenue && <td className={`${cellBase} text-right`}>${c.revenue.toFixed(2)}</td>}
+                          {settings.columns?.roas && <td className={`${cellBase} text-right`}>{c.roas.toFixed(2)}</td>}
+                          {settings.columns?.cpa && <td className={`${cellBase} text-right`}>{c.cpa ? `$${c.cpa.toFixed(2)}` : "—"}</td>}
+                          {settings.columns?.ctr && <td className={`${cellBase} text-right`}>{(c.ctr * 100).toFixed(2)}%</td>}
+                          {settings.columns?.recommendation && <td className={cellBase}><RecommendationPill rec={c.recommendation} /></td>}
+                          {settings.columns?.actions && (
+                            <td className={`${cellBase} text-right`}>
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => { 
+                                      setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl border"
+                                >
+                                More
+                                </button>
+                                {!readOnly && (
+                                  <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white">
+                                  Generate action
+                                  </button>
+                                )}
+                            </div>
+                            </td>
+                          )}
+                      </tr>
+                      ))
+                  )}
+                  </tbody>
+            </table>
+          </div>
         </section>
 
         {/* Audit log */}
@@ -956,6 +996,53 @@ function DashboardInner() {
                   onChange={(e) => setSettings(s => ({ ...s, lowCtrThreshold: Number(e.target.value) }))}
                   min={0} max={1}
                 />
+              </label>
+            </div>
+
+            {/* Columns */}
+            <div className="mt-4">
+              <div className="text-sm text-gray-600 mb-2">Table columns</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                {[
+                  ["spend", "Spend"],
+                  ["revenue", "Revenue"],
+                  ["roas", "ROAS"],
+                  ["cpa", "CPA"],
+                  ["ctr", "CTR"],
+                  ["recommendation", "Recommendation"],
+                  ["actions", "Actions"],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={!!settings.columns?.[key as keyof NonNullable<typeof settings.columns>]}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          columns: {
+                            ...(s.columns ?? DEFAULT_SETTINGS.columns!),
+                            [key]: e.target.checked,
+                          },
+                        }))
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Compact */}
+            <div className="mt-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={!!settings.compact}
+                  onChange={(e) => setSettings((s) => ({ ...s, compact: e.target.checked }))}
+                />
+                Compact mode (reduce row height)
               </label>
             </div>
 
