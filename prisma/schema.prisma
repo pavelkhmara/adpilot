@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Client {
+  id        String   @id @default(cuid())
+  key       String   @unique // acme, orbit, nova, zen
+  name      String
+  createdAt DateTime @default(now())
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  externalId  String?  // опционально id из Ads
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  channel     String   // "Google Ads" | "Meta Ads"
+  name        String
+  status      String   // "Active" | "Learning" | "Paused"
+  notes       String[] // text[]
+  metrics     MetricDaily[]
+  @@index([clientId, channel])
+  @@index([name])
+}
+
+model MetricDaily {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  date        DateTime @db.Date
+
+  impressions Int
+  clicks      Int
+  spend       Decimal  @db.Decimal(18,2)
+  conversions Int
+  revenue     Decimal  @db.Decimal(18,2)
+  frequency   Decimal  @db.Decimal(6,2)
+  ctr         Decimal  @db.Decimal(6,4) // 0..1
+
+  @@unique([campaignId, date])
+  @@index([date])
+}
+
