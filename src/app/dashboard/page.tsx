@@ -2,8 +2,15 @@
 export const dynamic = 'force-dynamic';
 import { Suspense, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getCampaigns, type CampaignDTO, type Channel } from "@/lib/adpilot";
+import { getCampaigns, type CampaignDTO, type Channel, type ClientId } from "@/lib/adpilot";
 
+
+const CLIENTS: { id: ClientId; name: string }[] = [
+  { id: "acme",  name: "Acme Store" },
+  { id: "orbit", name: "Orbit Gear" },
+  { id: "nova",  name: "Nova Beauty" },
+  { id: "zen",   name: "Zen Home" },
+];
 
 type RecType = "hold" | "pause" | "scale" | "creative";
 type Tone = "gray" | "green" | "red" | "amber" | "blue";
@@ -182,6 +189,10 @@ function DashboardInner() {
     });
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [rawCampaigns, setRawCampaigns] = useState<Campaign[]>([]);
+    const [clientId, setClientId] = useState<ClientId>(() => {
+      const v = (searchParams.get("client") as ClientId) ?? "acme";
+      return (["acme","orbit","nova","zen"] as const).includes(v) ? v : "acme";
+    });
 
     useEffect(() => {
       let alive = true;
@@ -190,6 +201,7 @@ function DashboardInner() {
         setErrorMsg(null);
         try {
           const data = await getCampaigns({
+            clientId,
             channel: channelFilter === "All" ? undefined : channelFilter,
             q: query || undefined,
           });
@@ -201,7 +213,7 @@ function DashboardInner() {
         }
       })();
       return () => { alive = false; };
-    }, [channelFilter, query]);
+    }, [ clientId, channelFilter, query ]);
 
     useEffect(() => {
       try {
@@ -212,12 +224,13 @@ function DashboardInner() {
 
     const urlState = useMemo(() => {
         return {
+            client: clientId || null,
             q: query || null,
             channel: channelFilter === "All" ? null : channelFilter,
             sort: sortBy || null,
             dir: sortBy ? sortDir : null,
         } as Record<string, string | null>;
-        }, [query, channelFilter, sortBy, sortDir]);
+        }, [ clientId, query, channelFilter, sortBy, sortDir ]);
 
         useEffect(() => {
         const params = new URLSearchParams();
@@ -256,7 +269,7 @@ function DashboardInner() {
   const filtered = useMemo(
     () => data.filter(c => (channelFilter === "All" || c.channel === channelFilter) &&
                           (!query || c.name.toLowerCase().includes(query.toLowerCase()))),
-    [data, channelFilter, query]
+    [ data, channelFilter, query ]
   );
 
   const sorted = useMemo<DerivedCampaign[]>(() => {
@@ -388,6 +401,16 @@ function DashboardInner() {
             >
               ⚙️
             </button>
+            <select
+              className="px-3 py-1.5 rounded-xl border text-sm"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value as ClientId)}
+              aria-label="Select client"
+            >
+              {CLIENTS.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -640,7 +663,7 @@ function DashboardInner() {
                 className="px-3 py-2 rounded-xl bg-gray-900 text-white"
                 onClick={() => setSelected(null)}
               >
-                Ok
+                Apply recommendation
               </button>
             </div>
           </div>
