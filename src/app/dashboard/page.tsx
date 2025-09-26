@@ -185,7 +185,7 @@ function computeDerived(c: Campaign, s: DemoSettings = DEFAULT_SETTINGS): Derive
 // --- UI components ----------------------------------------------------------
 function KpiCard({ label, value, hint }: { label: string, value: string, hint?: string }) {
   return (
-    <div className="rounded-2xl shadow p-4 bg-white flex flex-col gap-1">
+    <div className="rounded-2xl shadow p-4 bg-white dark:bg-gray-800 flex flex-col gap-1">
       <div className="text-sm text-gray-500">{label}</div>
       <div className="text-2xl font-semibold">{value}</div>
       {hint ? <div className="text-xs text-gray-400">{hint}</div> : null}
@@ -251,20 +251,18 @@ function DashboardInner() {
     const [audit, setAudit] = useState<AuditEntry[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [settings, setSettings] = useState<DemoSettings>(() => {
-      if (typeof window === "undefined") return DEFAULT_SETTINGS;
+    const [settings, setSettings] = useState<DemoSettings>(DEFAULT_SETTINGS);
+    useEffect(() => {
       try {
-        const raw = localStorage.getItem("adpilot_demo_settings");
-        return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-      } catch {
-        return DEFAULT_SETTINGS;
-      }
-    });
+        const raw = typeof window !== "undefined" ? localStorage.getItem("adpilot_demo_settings") : null;
+        if (raw) setSettings((s) => ({ ...s, ...JSON.parse(raw) }));
+      } catch {}
+    }, []);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [rawCampaigns, setRawCampaigns] = useState<Campaign[]>([]);
     const [clientId, setClientId] = useState<ClientId>(() => {
       const v = (searchParams.get("client") as ClientId) ?? "acme";
-      return (["acme","orbit","nova","zen"] as const).includes(v) ? v : "acme";
+      return (["acme","orbit","nova","zen"]).includes(v) ? v : "acme";
     });
     const [readOnly, setReadOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
     const [actionJson, setActionJson] = useState<string | null>(null);
@@ -276,6 +274,42 @@ function DashboardInner() {
     const [toasts, setToasts] = useState<Toast[]>([]);
     const rowPad = settings.compact ? "py-1.5" : "py-3";
     const cellBase = `p-3 ${settings.compact ? "py-1.5" : ""}`;
+
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
+
+
+    type ThemeMode = "light" | "dark" | "system";
+    const [theme, setTheme] = useState<ThemeMode>("system");
+
+    useEffect(() => {
+      try {
+        const saved = localStorage.getItem("adpilot_theme") as ThemeMode | null;
+        if (saved) setTheme(saved);
+      } catch {}
+    }, []);
+
+    useEffect(() => {
+      if (typeof window === "undefined") return;
+      const root = document.documentElement;
+      const apply = (m: ThemeMode) => {
+        if (m === "system") {
+          const prefersDark = window.matchMedia("(prefers-color-scheme: light)").matches;
+          root.classList.toggle("dark", prefersDark);
+        } else {
+          root.classList.toggle("dark", m === "dark");
+        }
+      };
+      apply(theme);
+
+      localStorage.setItem("adpilot_theme", theme);
+
+      const mq = window.matchMedia("(prefers-color-scheme: light)");
+      const onChange = () => { if (theme === "system") apply("system"); };
+      mq.addEventListener?.("change", onChange);
+      
+      return () => mq.removeEventListener?.("change", onChange);
+    }, [theme]);
 
 
 
@@ -534,9 +568,10 @@ function DashboardInner() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-800">
+    {/* <div className="min-h-screen bg-gray-50"> */}
       {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+      <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-2xl bg-black text-white grid place-items-center font-bold">A</div>
@@ -547,7 +582,7 @@ function DashboardInner() {
           <div className="flex items-center gap-2">
             {!readOnly && (
               <>
-              <button className="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-sm" onClick={onRefresh}>
+              <button className="px-3 py-1.5 rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm" onClick={onRefresh}>
                 {refreshing ? "Updating…" : "Refresh data"}
               </button>
               <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
@@ -579,7 +614,7 @@ function DashboardInner() {
               aria-label="Select client"
             >
               {CLIENTS.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option className="dark:bg-gray-900 dark:text-white" key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
@@ -596,24 +631,24 @@ function DashboardInner() {
       </header>
 
       {/* Content */}
-      <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+      <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6 text-gray-900 dark:text-gray-100">
         {/* Connections */}
         <section className="grid md:grid-cols-3 gap-3">
-          <div className="rounded-2xl border p-4 bg-white flex items-center justify-between">
+          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
               <div className="font-medium">Google Ads</div>
               <div className="text-xs text-gray-500">Status: connected (mock)</div>
             </div>
             <button className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-sm">Manage</button>
           </div>
-          <div className="rounded-2xl border p-4 bg-white flex items-center justify-between">
+          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
               <div className="font-medium">Meta Ads</div>
               <div className="text-xs text-gray-500">Status: connected (mock)</div>
             </div>
             <button className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-sm">Manage</button>
           </div>
-          <div className="rounded-2xl border p-4 bg-white flex items-center justify-between">
+          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
               <div className="font-medium">GA4</div>
               <div className="text-xs text-gray-500">Status: connected (mock)</div>
@@ -631,14 +666,14 @@ function DashboardInner() {
         </section>
 
         {/* Filters */}
-        <section className="rounded-2xl bg-white p-4 border flex flex-col md:flex-row md:items-center gap-3 justify-between">
+        <section className="rounded-2xl bg-white dark:bg-gray-800 p-4 border flex flex-col md:flex-row md:items-center gap-3 justify-between border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             {(["All", "Google Ads", "Meta Ads"] as const).map((ch) => (
               <button
                 key={ch}
                 onClick={() => onChannelClick(ch)}
                 className={`px-3 py-1.5 rounded-full text-sm border ${
-                  channelFilter === ch ? "bg-gray-900 text-white" : "bg-white"
+                  channelFilter === ch ? "bg-gray-900 text-white dark:bg-white dark:border-gray-900 dark:text-gray-900" : "bg-white dark:bg-gray-900"
                 }`}
               >
                 {ch}
@@ -673,114 +708,139 @@ function DashboardInner() {
         </section>
 
         {/* Table */}
-        <section className="rounded-2xl overflow-hidden border bg-white">
+        <section className="rounded-2xl overflow-hidden border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <div className="max-h-[60vh] overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className={`text-left ${cellBase}`}>Channel</th>
-                  <th className={`text-left ${cellBase}`}>Campaign</th>
-                  {settings.columns?.spend && (
-                    <th className={`text-right ${cellBase}`}>
-                        <button onClick={() => toggleSort("spend")} className="hover:underline">
-                            Spend {sortBy === "spend" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                        </button>
+            {!mounted ? (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="text-left p-3">Channel</th>
+                    <th className="text-left p-3">Campaign</th>
+                    <th className="text-right p-3">Spend</th>
+                    <th className="text-right p-3">Revenue</th>
+                    <th className="text-right p-3">ROAS</th>
+                    <th className="text-right p-3">CPA</th>
+                    <th className="text-right p-3">CTR</th>
+                    <th className="text-left p-3">Recommendation</th>
+                    <th className="text-right p-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t">
+                    <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
+                      Loading…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className={`text-left ${cellBase}`}>Channel</th>
+                    <th className={`text-left ${cellBase}`}>Campaign</th>
+                    {settings.columns?.spend && (
+                      <th className={`text-right ${cellBase}`}>
+                          <button onClick={() => toggleSort("spend")} className="hover:underline">
+                              Spend {sortBy === "spend" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                      </th>
+                    )}
+                    {settings.columns?.revenue && (
+                      <th className={`text-right ${cellBase}`}>
+                          <button onClick={() => toggleSort("revenue")} className="hover:underline">
+                              Revenue {sortBy === "revenue" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                      </th>
+                    )}
+                    {settings.columns?.roas && (
+                      <th className={`text-right ${cellBase}`}>
+                          <button onClick={() => toggleSort("roas")} className="hover:underline">
+                              ROAS {sortBy === "roas" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                      </th>
+                    )}
+                    {settings.columns?.cpa && (
+                      <th className={`text-right ${cellBase}`}>
+                          <button onClick={() => toggleSort("cpa")} className="hover:underline">
+                              CPA {sortBy === "cpa" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
+                      </th>
+                    )}
+                    {settings.columns?.ctr && (
+                      <th className={`text-right ${cellBase}`}>
+                          <button onClick={() => toggleSort("ctr")} className="hover:underline">
+                              CTR {sortBy === "ctr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                          </button>
                     </th>
-                  )}
-                  {settings.columns?.revenue && (
-                    <th className={`text-right ${cellBase}`}>
-                        <button onClick={() => toggleSort("revenue")} className="hover:underline">
-                            Revenue {sortBy === "revenue" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                        </button>
-                    </th>
-                  )}
-                  {settings.columns?.roas && (
-                    <th className={`text-right ${cellBase}`}>
-                        <button onClick={() => toggleSort("roas")} className="hover:underline">
-                            ROAS {sortBy === "roas" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                        </button>
-                    </th>
-                  )}
-                  {settings.columns?.cpa && (
-                    <th className={`text-right ${cellBase}`}>
-                        <button onClick={() => toggleSort("cpa")} className="hover:underline">
-                            CPA {sortBy === "cpa" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                        </button>
-                    </th>
-                  )}
-                  {settings.columns?.ctr && (
-                    <th className={`text-right ${cellBase}`}>
-                        <button onClick={() => toggleSort("ctr")} className="hover:underline">
-                            CTR {sortBy === "ctr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                        </button>
-                  </th>
-                  )}
-                  {settings.columns?.recommendation && (
-                    <th className={`text-left ${cellBase}`}>Recommendation</th>
-                  )}
-                  {settings.columns?.actions && (
-                    <th className={`text-right ${cellBase}`}>Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                  {refreshing ? (
-                      <>
-                      <SkeletonRow />
-                      <SkeletonRow />
-                      <SkeletonRow />
-                      <SkeletonRow />
-                      <SkeletonRow />
-                      </>
-                  ) : sorted.length === 0 ? (
-                      <tr>
-                      <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
-                          No results found for current filters. Reset filters or modify your search.
-                      </td>
-                      </tr>
-                  ) : (
-                      sorted.map((c) => (
-                      <tr key={c.id} className="border-t">
-                          <td className={`${cellBase} whitespace-nowrap`}>{c.channel}</td>
-                          <td className={cellBase}>
-                          <div className="font-medium">{c.name}</div>
-                          <div className="text-xs text-gray-500">{c.status}</div>
-                          </td>
-                          {settings.columns?.spend && <td className={`${cellBase} text-right`}>${c.spend.toFixed(2)}</td>}
-                          {settings.columns?.revenue && <td className={`${cellBase} text-right`}>${c.revenue.toFixed(2)}</td>}
-                          {settings.columns?.roas && <td className={`${cellBase} text-right`}>{c.roas.toFixed(2)}</td>}
-                          {settings.columns?.cpa && <td className={`${cellBase} text-right`}>{c.cpa ? `$${c.cpa.toFixed(2)}` : "—"}</td>}
-                          {settings.columns?.ctr && <td className={`${cellBase} text-right`}>{(c.ctr * 100).toFixed(2)}%</td>}
-                          {settings.columns?.recommendation && <td className={cellBase}><RecommendationPill rec={c.recommendation} /></td>}
-                          {settings.columns?.actions && (
-                            <td className={`${cellBase} text-right`}>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { 
-                                      setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
-                                    }}
-                                    className="px-3 py-1.5 rounded-xl border"
-                                >
-                                More
-                                </button>
-                                {!readOnly && (
-                                  <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white">
-                                  Generate action
-                                  </button>
-                                )}
-                            </div>
+                    )}
+                    {settings.columns?.recommendation && (
+                      <th className={`text-left ${cellBase}`}>Recommendation</th>
+                    )}
+                    {settings.columns?.actions && (
+                      <th className={`text-right ${cellBase}`}>Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                    {refreshing ? (
+                        <>
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        </>
+                    ) : sorted.length === 0 ? (
+                        <tr>
+                        <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
+                            No results found for current filters. Reset filters or modify your search.
+                        </td>
+                        </tr>
+                    ) : (
+                        sorted.map((c) => (
+                        <tr key={c.id} className="border-t">
+                            <td className={`${cellBase} whitespace-nowrap`}>{c.channel}</td>
+                            <td className={cellBase}>
+                            <div className="font-medium">{c.name}</div>
+                            <div className="text-xs text-gray-500">{c.status}</div>
                             </td>
-                          )}
-                      </tr>
-                      ))
-                  )}
-                  </tbody>
-            </table>
+                            {settings.columns?.spend && <td className={`${cellBase} text-right`}>${c.spend.toFixed(2)}</td>}
+                            {settings.columns?.revenue && <td className={`${cellBase} text-right`}>${c.revenue.toFixed(2)}</td>}
+                            {settings.columns?.roas && <td className={`${cellBase} text-right`}>{c.roas.toFixed(2)}</td>}
+                            {settings.columns?.cpa && <td className={`${cellBase} text-right`}>{c.cpa ? `$${c.cpa.toFixed(2)}` : "—"}</td>}
+                            {settings.columns?.ctr && <td className={`${cellBase} text-right`}>{(c.ctr * 100).toFixed(2)}%</td>}
+                            {settings.columns?.recommendation && <td className={cellBase}><RecommendationPill rec={c.recommendation} /></td>}
+                            {settings.columns?.actions && (
+                              <td className={`${cellBase} text-right`}>
+                              <div className="flex justify-end gap-2">
+                                  <button onClick={() => { 
+                                        setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl border"
+                                  >
+                                  More
+                                  </button>
+                                  {!readOnly && (
+                                    <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900">
+                                    Generate action
+                                    </button>
+                                  )}
+                              </div>
+                              </td>
+                            )}
+                        </tr>
+                        ))
+                    )}
+                    </tbody>
+              </table>
+              )}
           </div>
         </section>
 
         {/* Audit log */}
         {!readOnly && (
-        <section className="rounded-2xl border bg-white p-4">
+        <section className="rounded-2xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="font-medium">Activity Journal (local, mock)</div>
             <button
@@ -819,7 +879,7 @@ function DashboardInner() {
           aria-modal="true"
         >
           <div
-            className="bg-white mt-10 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+            className="bg-white dark:bg-gray-800 mt-10 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -834,19 +894,19 @@ function DashboardInner() {
             {/* Scrollable content */}
             <div className="px-5 py-4 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="p-2 rounded-lg bg-gray-50">
+                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
                   <div className="text-gray-500">Spend</div>
                   <div className="font-medium">€{selected.spend.toFixed(2)}</div>
                 </div>
-                <div className="p-2 rounded-lg bg-gray-50">
+                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
                   <div className="text-gray-500">Revenue</div>
                   <div className="font-medium">€{selected.revenue.toFixed(2)}</div>
                 </div>
-                <div className="p-2 rounded-lg bg-gray-50">
+                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
                   <div className="text-gray-500">ROAS</div>
                   <div className="font-medium">{selected.roas.toFixed(2)}</div>
                 </div>
-                <div className="p-2 rounded-lg bg-gray-50">
+                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
                   <div className="text-gray-500">CPA</div>
                   <div className="font-medium">{selected.cpa ? `€${selected.cpa.toFixed(2)}` : "—"}</div>
                 </div>
@@ -888,7 +948,7 @@ function DashboardInner() {
                 {payloadOpen && (
                   <div className="px-3 pb-3">
                     {actionJson ? (
-                      <div className="rounded-lg border bg-gray-50 p-2">
+                      <div className="rounded-lg border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-2">
                         <pre className="text-xs overflow-auto max-h-64 leading-5">{actionJson}</pre>
                         <div className="mt-2 flex items-center justify-end gap-2">
                           <button
@@ -917,7 +977,7 @@ function DashboardInner() {
               </button>
               {!readOnly && (
                 <button
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white"
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900"
                   onClick={() => setSelected(null)}
                 >
                   Apply recommendation
@@ -930,7 +990,7 @@ function DashboardInner() {
 
       {settingsOpen && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-xl w-full p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div className="text-xl font-semibold">Demo settings</div>
               <button className="text-gray-400" onClick={() => setSettingsOpen(false)}>✕</button>
@@ -1046,6 +1106,20 @@ function DashboardInner() {
               </label>
             </div>
 
+            <div className="mt-4">
+              <select
+                className="px-3 py-1.5 rounded-xl border text-sm"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as ThemeMode)}
+                aria-label="Switch theme"
+                title="Switch theme"
+              >
+                <option className="dark:bg-gray-900 dark:text-white" value="light">Theme: Light</option>
+                <option className="dark:bg-gray-900 dark:text-white" value="dark">Theme: Dark</option>
+                <option className="dark:bg-gray-900 dark:text-white" value="system">Theme: System</option>
+              </select>
+            </div>
+
             <div className="mt-5 flex items-center justify-between">
               <button
                 className="text-sm text-gray-500 underline"
@@ -1056,7 +1130,7 @@ function DashboardInner() {
               <div className="flex items-center gap-2">
                 <button className="px-3 py-2 rounded-xl border" onClick={() => setSettingsOpen(false)}>Close</button>
                 <button
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white"
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900"
                   onClick={() => setSettingsOpen(false)}
                 >
                   Apply
@@ -1074,7 +1148,7 @@ function DashboardInner() {
           aria-modal="true"
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b flex items-center justify-between">
@@ -1083,10 +1157,10 @@ function DashboardInner() {
             </div>
             <div className="px-5 py-4 text-sm">
               <ul className="space-y-2">
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50">/</kbd> — focus search</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50">Esc</kbd> — close modal/hint</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50">Ctrl</kbd>/<kbd className="px-2 py-1 rounded border bg-gray-50">⌘</kbd> + <kbd className="px-2 py-1 rounded border bg-gray-50">K</kbd> — open settings</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50">?</kbd> — show keyboard shortcuts help</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">/</kbd> — focus search</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">Esc</kbd> — close modal/hint</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">Ctrl</kbd>/<kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">⌘</kbd> + <kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">K</kbd> — open settings</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">?</kbd> — show keyboard shortcuts help</li>
               </ul>
             </div>
             <div className="px-5 py-3 border-t text-right">
