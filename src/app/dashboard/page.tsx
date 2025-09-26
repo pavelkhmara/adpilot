@@ -1,11 +1,58 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
+import { ReadonlyURLSearchParams, useRouter, useSearchParams } from "next/navigation";
+
+type Channel = "Google Ads" | "Meta Ads";
+type RecType = "hold" | "pause" | "scale" | "creative";
+type Tone = "gray" | "green" | "red" | "amber" | "blue";
+
+type RecAction =
+  | { kind: "pause_campaign" }
+  | { kind: "increase_budget"; by: number }
+  | { kind: "rotate_creatives" }
+  | null;
+
+interface Recommendation {
+  type: RecType;
+  title: string;
+  reason: string;
+  risk?: string;
+  action: RecAction;
+}
+
+interface Campaign {
+  id: string;
+  channel: Channel;
+  name: string;
+  status: "Active" | "Learning" | "Paused";
+  spend: number;
+  clicks: number;
+  impressions: number;
+  conversions: number;
+  revenue: number;
+  frequency: number;
+  ctr: number; // 0..1
+  notes?: string[];
+}
+
+interface DerivedCampaign extends Campaign {
+  roas: number;
+  cpa: number | null;
+  recommendation: Recommendation | null;
+}
+
+interface AuditEntry {
+  ts: string;
+  campaign: string;
+  channel: Channel;
+  action: string;
+  title: string;
+}
 
 
 // --- Mock data --------------------------------------------------------------
-const MOCK_CAMPAIGNS = [
+const MOCK_CAMPAIGNS: Campaign[] = [
   {
     id: "g-1",
     channel: "Google Ads",
@@ -64,16 +111,16 @@ const MOCK_CAMPAIGNS = [
   },
 ];
 
-function computeDerived(c) {
+function computeDerived(c: Campaign): DerivedCampaign {
   const roas = c.revenue && c.spend ? c.revenue / c.spend : 0;
   const cpa = c.conversions ? c.spend / c.conversions : null;
-  let recommendation = null;
+  let recommendation: Recommendation | null = null;
 
   // Simple heuristic rules for demo
   if (c.status === "Learning") {
     recommendation = {
       type: "hold",
-      title: "Leave As Is: Learning Phase", // или "Don't Touch: Campaign Learning"
+      title: "Leave As Is: Learning Phase",
       reason: "Campaign is in learning phase. Evaluate no earlier than 72 hours.",
       action: null,
       risk: "Premature changes will reset learning.",
@@ -108,7 +155,7 @@ function computeDerived(c) {
 }
 
 // --- UI components ----------------------------------------------------------
-function KpiCard({ label, value, hint }) {
+function KpiCard({ label, value, hint }: { label: string, value: string, hint?: string }) {
   return (
     <div className="rounded-2xl shadow p-4 bg-white flex flex-col gap-1">
       <div className="text-sm text-gray-500">{label}</div>
@@ -118,8 +165,8 @@ function KpiCard({ label, value, hint }) {
   );
 }
 
-function Badge({ children, tone = "gray" }) {
-  const map = {
+function Badge({ children, tone = "gray" }: { children: React.ReactNode; tone?: Tone }) {
+  const map: Record<Tone, string> = {
     gray: "bg-gray-100 text-gray-700",
     green: "bg-green-100 text-green-700",
     red: "bg-red-100 text-red-700",
@@ -131,7 +178,7 @@ function Badge({ children, tone = "gray" }) {
   );
 }
 
-function RecommendationPill({ rec }) {
+function RecommendationPill({ rec }: { rec: Recommendation | null }) {
   if (!rec) return <Badge tone="gray">No recommendations</Badge>;
   const tone =
     rec.type === "scale"
@@ -163,17 +210,17 @@ export default function AdPilotMockUI() {
 
 
     const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
-    const [channelFilter, setChannelFilter] = useState<"All" | "Google Ads" | "Meta Ads">(
-    (searchParams.get("channel") as any) ?? "All"
+    const [channelFilter, setChannelFilter] = useState<"All" | Channel>(
+    (searchParams.get("channel") as Channel) ?? "All"
     );
     const [sortBy, setSortBy] = useState<"spend" | "revenue" | "roas" | "cpa" | "ctr" | null>(
-    (searchParams.get("sort") as any) ?? null
+    (searchParams.get("sort") as ("spend" | "revenue" | "roas" | "cpa" | "ctr")) ?? null
     );
     const [sortDir, setSortDir] = useState<"asc" | "desc">(
     (searchParams.get("dir") as "asc" | "desc") ?? "desc"
     );
-    const [selected, setSelected] = useState(null);
-    const [audit, setAudit] = useState([]);
+    const [selected, setSelected] = useState<DerivedCampaign | null>(null);
+    const [audit, setAudit] = useState<AuditEntry[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -216,34 +263,33 @@ export default function AdPilotMockUI() {
 
 
 
-  const data = useMemo(() => MOCK_CAMPAIGNS.map(computeDerived), []);
+  const data = useMemo<DerivedCampaign[]>(() => MOCK_CAMPAIGNS.map(computeDerived), []);
 
-  const filtered = data.filter((c) => {
-    const byChannel = channelFilter === "All" || c.channel === channelFilter;
-    const byQuery = !query || c.name.toLowerCase().includes(query.toLowerCase());
-    return byChannel && byQuery;
-  });
+  const filtered = useMemo(
+    () => data.filter(c => (channelFilter === "All" || c.channel === channelFilter) &&
+                          (!query || c.name.toLowerCase().includes(query.toLowerCase()))),
+    [data, channelFilter, query]
+  );
 
-  const sorted = useMemo(() => {
+  const sorted = useMemo<DerivedCampaign[]>(() => {
     const arr = [...filtered];
     if (!sortBy) return arr;
     arr.sort((a, b) => {
-        const av =
+      const av =
         sortBy === "roas" ? a.roas :
         sortBy === "cpa" ? (a.cpa ?? Number.POSITIVE_INFINITY) :
         sortBy === "ctr" ? a.ctr :
-        // spend / revenue:
-        (a as any)[sortBy];
-        const bv =
+        sortBy === "spend" ? a.spend : a.revenue;
+      const bv =
         sortBy === "roas" ? b.roas :
         sortBy === "cpa" ? (b.cpa ?? Number.POSITIVE_INFINITY) :
         sortBy === "ctr" ? b.ctr :
-        (b as any)[sortBy];
-        if (av === bv) return 0;
-        return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+        sortBy === "spend" ? b.spend : b.revenue;
+      if (av === bv) return 0;
+      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
     return arr;
-    }, [filtered, sortBy, sortDir]);
+  }, [filtered, sortBy, sortDir]);
 
 
   const totals = useMemo(() => {
@@ -268,13 +314,13 @@ export default function AdPilotMockUI() {
     };
   }, [filtered]);
 
-  function onGenerateAction(c) {
+  function onGenerateAction(c: DerivedCampaign) {
     const rec = c.recommendation;
-    const entry = {
+    const entry: AuditEntry = {
       ts: new Date().toISOString(),
       campaign: c.name,
       channel: c.channel,
-      action: rec?.action?.kind || "none",
+      action: rec?.action ? (rec.action as Exclude<RecAction, null>).kind : "none",
       title: rec?.title || "no-op",
     };
     setAudit((prev) => [entry, ...prev]);
@@ -284,29 +330,25 @@ export default function AdPilotMockUI() {
   function onRefresh() {
     setRefreshing(true);
     setErrorMsg(null);
-    // setTimeout(() => setErrorMsg("Failed to update yesterday's data: API quota exceeded. Please try again later."), 1000);
+    // setTimeout(() => setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later."), 1000);
 
     setTimeout(() => setRefreshing(false), 800);
   }
 
-  function toCsv(rows: any[]) {
-    const headers = [
-        "Channel","Campaign","Status",
-        "Spend","Revenue","ROAS","CPA","CTR"
-    ];
+  function toCsv(rows: DerivedCampaign[]) {
+    const headers = ["Channel","Campaign","Status","Spend","Revenue","ROAS","CPA","CTR"];
     const lines = rows.map((c) => [
-        c.channel,
-        c.name,
-        c.status,
-        c.spend.toFixed(2),
-        c.revenue.toFixed(2),
-        c.roas.toFixed(2),
-        c.cpa ? c.cpa.toFixed(2) : "",
-        (c.ctr * 100).toFixed(2) + "%"
+      c.channel, c.name, c.status,
+      c.spend.toFixed(2), c.revenue.toFixed(2),
+      c.roas.toFixed(2), c.cpa ? c.cpa.toFixed(2) : "",
+      (c.ctr * 100).toFixed(2) + "%"
     ]);
-    const csv = [headers, ...lines].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const csv = [headers, ...lines]
+      .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))
+      .join("\n");
     return csv;
-    }
+  }
+
 
     function download(filename: string, text: string) {
     const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
@@ -394,7 +436,7 @@ export default function AdPilotMockUI() {
         {/* Filters */}
         <section className="rounded-2xl bg-white p-4 border flex flex-col md:flex-row md:items-center gap-3 justify-between">
           <div className="flex items-center gap-2">
-            {(["All", "Google Ads", "Meta Ads"]).map((ch) => (
+            {(["All", "Google Ads", "Meta Ads"] as const).map((ch) => (
               <button
                 key={ch}
                 onClick={() => setChannelFilter(ch)}
@@ -510,7 +552,7 @@ export default function AdPilotMockUI() {
             </button>
           </div>
           {audit.length === 0 ? (
-            <div className="text-sm text-gray-500">No actions yet. Use 'Generate Action' for a campaign.</div>
+            <div className="text-sm text-gray-500">No actions yet. Use &apos;Generate Action&apos; for a campaign.</div>
           ) : (
             <ul className="space-y-2">
               {audit.map((a, idx) => (
