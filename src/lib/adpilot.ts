@@ -53,6 +53,13 @@ export type FetchFilters = {
     q?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string; // YYYY-MM-DD
+
+    lowRoas?: number;
+    highRoas?: number;
+    minSpendForPause?: number;
+    minConversionsForScale?: number;
+    fatigueFreq?: number;
+    lowCtr?: number;
 };
 
 export async function getCampaigns(filters: FetchFilters = {}) {
@@ -62,6 +69,13 @@ export async function getCampaigns(filters: FetchFilters = {}) {
   if (filters.q) params.set("q", filters.q);
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) params.set("dateTo", filters.dateTo);
+
+  if (filters.lowRoas) params.set("lowRoas", String(filters.lowRoas));
+  if (filters.highRoas) params.set("highRoas", String(filters.highRoas));
+  if (filters.minSpendForPause) params.set("minSpendForPause", String(filters.minSpendForPause));
+  if (filters.minConversionsForScale) params.set("minConvForScale", String(filters.minConversionsForScale));
+  if (filters.fatigueFreq) params.set("fatigueFreq", String(filters.fatigueFreq));
+  if (filters.lowCtr) params.set("lowCtr", String(filters.lowCtr));
 
   const url = `/api/campaigns${params.toString() ? `?${params.toString()}` : ""}`;
   const res = await fetch(url, { cache: "no-store" });

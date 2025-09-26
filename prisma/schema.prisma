@@ -29,6 +29,7 @@ model Campaign {
   metrics     MetricDaily[]
   @@index([clientId, channel])
   @@index([name])
+  @@unique([clientId, name, channel])
 }
 
 model MetricDaily {

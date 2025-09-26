@@ -278,6 +278,14 @@ function DashboardInner() {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
 
+    const [importOpen, setImportOpen] = useState(false);
+    const [importClient, setImportClient] = useState<ClientId>(clientId);
+    const [importing, setImporting] = useState(false);
+    const importFileRef = useRef<HTMLInputElement | null>(null);
+    const [onlyActive, setOnlyActive] = useState(true);
+
+
+
 
     type ThemeMode = "light" | "dark" | "system";
     const [theme, setTheme] = useState<ThemeMode>("system");
@@ -311,6 +319,42 @@ function DashboardInner() {
       return () => mq.removeEventListener?.("change", onChange);
     }, [theme]);
 
+    function fmt(d: Date) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function addDays(d: Date, n: number) {
+      const x = new Date(d);
+      x.setDate(x.getDate() + n);
+      return x;
+    }
+
+    const today = new Date();
+    const defaultFrom = new Date(today);
+    defaultFrom.setDate(today.getDate() - 29);
+
+    const [dateFrom, setDateFrom] = useState<string>(fmt(defaultFrom));
+    const [dateTo, setDateTo] = useState<string>(fmt(today));
+
+    function applyPreset(p: "7d"|"14d"|"30d"|"mtd"|"prev-month") {
+      const now = new Date();
+      if (p === "mtd") {
+        const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        setDateFrom(fmt(first)); setDateTo(fmt(now)); return;
+      }
+      if (p === "prev-month") {
+        const firstThis = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const firstPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()-1, 1));
+        const lastPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)); 
+        setDateFrom(fmt(firstPrev)); setDateTo(fmt(lastPrev)); return;
+      }
+      const map = { "7d": 6, "14d": 13, "30d": 29 } as const;
+      setDateFrom(fmt(addDays(now, -map[p]))); setDateTo(fmt(now));
+    }
+
 
 
 
@@ -324,6 +368,14 @@ function DashboardInner() {
             clientId,
             channel: channelFilter === "All" ? undefined : channelFilter,
             q: query || undefined,
+            dateFrom: isValidYmd(dateFrom) ? dateFrom : undefined,
+            dateTo:   isValidYmd(dateTo)   ? dateTo   : undefined,
+            lowRoas: settings.lowRoasThreshold,
+            highRoas: settings.highRoasThreshold,
+            minSpendForPause: settings.minSpendForPause,
+            minConversionsForScale: settings.minConversionsForScale,
+            fatigueFreq: settings.fatigueFreq,
+            lowCtr: settings.lowCtrThreshold,
           });
           if (alive) setRawCampaigns(data);
         } catch (e) {
@@ -333,7 +385,7 @@ function DashboardInner() {
         }
       })();
       return () => { alive = false; };
-    }, [ clientId, channelFilter, query ]);
+    }, [ clientId, channelFilter, query, dateFrom, dateTo, settings.lowRoasThreshold, settings.highRoasThreshold, settings.minSpendForPause, settings.minConversionsForScale, settings.fatigueFreq, settings.lowCtrThreshold ]);
 
     useEffect(() => {
       try {
@@ -388,17 +440,29 @@ function DashboardInner() {
       sort: sortBy || null,
       dir: sortBy ? sortDir : null,
       mode: readOnly ? "ro" : null,
-    }), [clientId, query, channelFilter, sortBy, sortDir, readOnly]);
+      from: isValidYmd(dateFrom) ? dateFrom : null,
+      to:   isValidYmd(dateTo)   ? dateTo   : null,
+    }), [clientId, query, channelFilter, sortBy, sortDir, readOnly, dateFrom, dateTo]);
 
 
     useEffect(() => {
       const params = new URLSearchParams();
       Object.entries(urlState).forEach(([k, v]) => {
-          if (v != null && v !== "") params.set(k, v);
+        if (v != null && v !== "") params.set(k, v as string);
       });
+
       const qs = params.toString();
       router.replace(qs ? `?${qs}` : "");
     }, [urlState, router]);
+
+    useEffect(() => {
+      const sp = new URLSearchParams(window.location.search);
+      const from = sp.get("from");
+      const to = sp.get("to");
+      if (isValidYmd(from || undefined)) setDateFrom(from!);
+      if (isValidYmd(to   || undefined)) setDateTo(to!);
+    }, []);
+
 
 
     function onChannelClick(ch: "All" | Channel) {
@@ -423,7 +487,7 @@ function DashboardInner() {
         }
     }
 
-    function pushToast(text: string, ms = 2500) {
+    function pushToast(text: string, ms = 3500) {
       const id = Math.random().toString(36).slice(2);
       setToasts((t) => [{ id, text }, ...t]);
       setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
@@ -492,10 +556,27 @@ function DashboardInner() {
       params.set("sort", sortBy);
       params.set("dir", sortDir);
     }
+    params.set("from", dateFrom);
+    params.set("to", dateTo);
+
     params.set("mode", "ro");
     const qs = params.toString();
     return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
   }
+
+  const alerts = useMemo(() => {
+    const actionable = filtered.filter(
+      (c) => c.recommendation && c.recommendation.type !== "hold"
+    );
+    const weight = (t: RecType) =>
+      t === "pause" ? 0 : t === "scale" ? 1 : t === "creative" ? 2 : 3;
+    actionable.sort((a, b) => {
+      const ta = a.recommendation!.type, tb = b.recommendation!.type;
+      if (ta !== tb) return weight(ta) - weight(tb);
+      return b.spend - a.spend;
+    });
+    return actionable.slice(0, 5);
+  }, [filtered]);
 
 
   function onGenerateAction(c: DerivedCampaign) {
@@ -515,13 +596,30 @@ function DashboardInner() {
     setSelected(c);
   }
 
+  function isValidYmd(s?: string) {
+    if (!s) return false;
+    // ожидаем YYYY-MM-DD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    const t = Date.parse(s + "T00:00:00Z");
+    return !Number.isNaN(t);
+  }
+
   async function onRefresh() {
     setRefreshing(true);
     setErrorMsg(null);
     try {
       const data = await getCampaigns({
+        clientId,
         channel: channelFilter === "All" ? undefined : channelFilter,
         q: query || undefined,
+        dateFrom: isValidYmd(dateFrom) ? dateFrom : undefined,
+        dateTo: isValidYmd(dateTo) ? dateTo : undefined,
+        lowRoas: settings.lowRoasThreshold,
+        highRoas: settings.highRoasThreshold,
+        minSpendForPause: settings.minSpendForPause,
+        minConversionsForScale: settings.minConversionsForScale,
+        fatigueFreq: settings.fatigueFreq,
+        lowCtr: settings.lowCtrThreshold,
       });
       setRawCampaigns(data);
       pushToast("Data updated");
@@ -587,6 +685,9 @@ function DashboardInner() {
               </button>
               <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
                   Export CSV
+              </button>
+              <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={() => { setImportClient(clientId); setImportOpen(true); }}>
+                Import CSV
               </button>
               <button
                 className="px-3 py-1.5 rounded-xl border text-sm"
@@ -679,7 +780,40 @@ function DashboardInner() {
                 {ch}
               </button>
             ))}
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={onlyActive} onChange={(e)=>setOnlyActive(e.target.checked)} />
+              Only active
+            </label>
+
           </div>
+            
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-500">Period:</label>
+
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-app bg-app text-sm"
+              />
+              <span className="text-gray-400">—</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-app bg-app text-sm"
+              />
+            </div>
+            <div className="flex items-center self-center pt-1 gap-1">
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("7d")}>7d</span>
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("14d")}>14d</span>
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("30d")}>30d</span>
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("mtd")}>MTD</span>
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("prev-month")}>Prev M</span>
+            </div>
+          </div>
+
           <div className="grid col">
             <div className="flex items-center align-top gap-2">
               <input
@@ -706,6 +840,40 @@ function DashboardInner() {
             <div className="text-xs text-gray-400">Press «/» to search</div>
           </div>
         </section>
+
+        {/* Alerts */}
+        {alerts.length > 0 && (
+          <section className="rounded-2xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
+            <div className="text-sm font-medium mb-2">Period Alerts</div>
+            <ul className="text-sm space-y-2">
+              {alerts.map((c) => (
+                <li key={c.id} className="flex items-start gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs
+                    ${c.recommendation!.type === "pause"
+                        ? "bg-red-100 text-red-700"
+                        : c.recommendation!.type === "scale"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {c.recommendation!.title}
+                  </span>
+
+                  <button
+                    className="text-left text-gray-700 dark:text-gray-200 hover:underline"
+                    onClick={() => setSelected(c)}
+                    title="Open campaign details"
+                  >
+                    <span className="text-gray-500">{c.channel}</span> — <strong>{c.name}</strong>
+                    {c.recommendation?.reason ? <> · {c.recommendation!.reason}</> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
 
         {/* Table */}
         <section className="rounded-2xl overflow-hidden border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
@@ -1177,6 +1345,80 @@ function DashboardInner() {
           </div>
         ))}
       </div>
+      {importOpen && (
+      <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setImportOpen(false)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="text-xl font-semibold">Import CSV (beta)</div>
+            <button className="text-gray-400" onClick={() => setImportOpen(false)}>✕</button>
+          </div>
+
+          <div className="mt-4 space-y-3 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="text-gray-600 dark:text-gray-300">Client</span>
+              <select
+                className="px-3 py-2 rounded-xl border border-app bg-app"
+                value={importClient}
+                onChange={(e) => setImportClient(e.target.value as ClientId)}
+              >
+                {CLIENTS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-gray-600 dark:text-gray-300">file CSV</span>
+              <input ref={importFileRef} type="file" accept=".csv,text/csv" className="px-3 py-2 rounded-xl border border-app bg-app" />
+              <div className="text-xs text-gray-500">
+                Minimal columns: date, campaign, channel, impressions, clicks, spend, conversions, revenue. Separator , or ; .
+              </div>
+            </label>
+          </div>
+
+          <div className="mt-5 flex items-center justify-between">
+            <button className="text-sm text-gray-500 underline" onClick={() => {
+              // CSV example
+              const sample = `date,campaign,channel,impressions,clicks,spend,conversions,revenue,frequency,ctr
+    2025-09-01,Brand Search PL,Google Ads,4000,120,120.00,10,950,1.2,0.03
+    2025-09-01,Retargeting 30d,Meta Ads,6000,240,80.00,12,720,1.8,0.04`;
+              navigator.clipboard.writeText(sample);
+              pushToast("CSV example copied");
+            }}>Copy CSV example</button>
+
+            <div className="flex items-center gap-2">
+              <button className="px-3 py-2 rounded-xl border" onClick={() => setImportOpen(false)}>Cancel</button>
+              <button
+                className="px-3 py-2 rounded-xl bg-gray-900 text-white disabled:opacity-60"
+                disabled={importing}
+                onClick={async () => {
+                  const file = importFileRef.current?.files?.[0];
+                  if (!file) { pushToast("Choose CSV-file"); return; }
+                  setImporting(true);
+                  try {
+                    const fd = new FormData();
+                    fd.set("client", importClient);
+                    fd.set("file", file);
+                    const res = await fetch("/api/import", { method: "POST", body: fd });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data?.error || "Import failed");
+                    pushToast(`Import OK: campaigns +${data.campaignsCreated}, metrics lines ${data.metricRowsUpserted}`);
+                    // reload current client data
+                    setClientId(importClient);
+                    await onRefresh();
+                    setImportOpen(false);
+                  } catch (e) {
+                    pushToast("Import error");
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+              >
+                {importing ? "Importing…" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
 
     </div>
