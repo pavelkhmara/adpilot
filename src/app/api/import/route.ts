@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
             where: { clientId: client.id, name: sample.campaign, channel: sample.channel },
             select: { id: true },
           });
+
           if (found) {
             campaignId = found.id;
             existingMap.set(key, { id: found.id });

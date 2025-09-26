@@ -264,7 +264,7 @@ function DashboardInner() {
       const v = (searchParams.get("client") as ClientId) ?? "acme";
       return (["acme","orbit","nova","zen"]).includes(v) ? v : "acme";
     });
-    const [readOnly, setReadOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
+    const [readOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
     const [actionJson, setActionJson] = useState<string | null>(null);
     const [payloadOpen, setPayloadOpen] = useState(false);
     const [showHotkeys, setShowHotkeys] = useState(false);
@@ -272,7 +272,6 @@ function DashboardInner() {
 
     type Toast = { id: string; text: string };
     const [toasts, setToasts] = useState<Toast[]>([]);
-    const rowPad = settings.compact ? "py-1.5" : "py-3";
     const cellBase = `p-3 ${settings.compact ? "py-1.5" : ""}`;
 
     const [mounted, setMounted] = useState(false);
@@ -341,20 +340,26 @@ function DashboardInner() {
 
     function applyPreset(p: "7d"|"14d"|"30d"|"mtd"|"prev-month") {
       const now = new Date();
+
       if (p === "mtd") {
         const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        setDateFrom(fmt(first)); setDateTo(fmt(now)); return;
+        setDateFrom(fmt(first));
+        setDateTo(fmt(now));
+        return;
       }
-      if (p === "prev-month") {
-        const firstThis = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        const firstPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth()-1, 1));
-        const lastPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)); 
-        setDateFrom(fmt(firstPrev)); setDateTo(fmt(lastPrev)); return;
-      }
-      const map = { "7d": 6, "14d": 13, "30d": 29 } as const;
-      setDateFrom(fmt(addDays(now, -map[p]))); setDateTo(fmt(now));
-    }
 
+      if (p === "prev-month") {
+        const firstPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+        const lastPrev  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+        setDateFrom(fmt(firstPrev));
+        setDateTo(fmt(lastPrev));
+        return;
+      }
+
+      const map = { "7d": 6, "14d": 13, "30d": 29 } as const;
+      setDateFrom(fmt(addDays(now, -map[p])));
+      setDateTo(fmt(now));
+    }
 
 
 
@@ -1405,7 +1410,7 @@ function DashboardInner() {
                     setClientId(importClient);
                     await onRefresh();
                     setImportOpen(false);
-                  } catch (e) {
+                  } catch {
                     pushToast("Import error");
                   } finally {
                     setImporting(false);

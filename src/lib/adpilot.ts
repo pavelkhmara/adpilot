@@ -1,6 +1,3 @@
-
-import { prisma } from "@/lib/db";
-
 export type Channel = "Google Ads" | "Meta Ads";
 export type ClientId = "acme" | "orbit" | "nova" | "zen" | string;
 
