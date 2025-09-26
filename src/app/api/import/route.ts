@@ -97,48 +97,29 @@ export async function POST(req: NextRequest) {
       // получаем/создаём кампанию
       let campaignId: string | undefined = existingMap.get(key)?.id;
 
-      // Вариант А (рекомендую, если добавил @@unique): upsert
       if (!campaignId) {
-        try {
-          const camp = await prisma.campaign.upsert({
-            where: { clientId_name_channel: { clientId: client.id, name: sample.campaign, channel: sample.channel } },
-            update: {},
-            create: {
+        const found = await prisma.campaign.findFirst({
+          where: { clientId: client.id, name: sample.campaign, channel: sample.channel },
+          select: { id: true },
+        });
+
+        if (found) {
+          campaignId = found.id;
+          existingMap.set(key, { id: found.id });
+        } else {
+          const created = await prisma.campaign.create({
+            data: {
               clientId: client.id,
               name: sample.campaign,
               channel: sample.channel,
               status: "Active",
               notes: [],
             },
-          });
-          campaignId = camp.id;
-          existingMap.set(key, { id: camp.id });
-          campaignsCreated++;
-        } catch {
-          // Вариант B (если нет @@unique): fallback через findFirst/create
-          const found = await prisma.campaign.findFirst({
-            where: { clientId: client.id, name: sample.campaign, channel: sample.channel },
             select: { id: true },
           });
-
-          if (found) {
-            campaignId = found.id;
-            existingMap.set(key, { id: found.id });
-          } else {
-            const created = await prisma.campaign.create({
-              data: {
-                clientId: client.id,
-                name: sample.campaign,
-                channel: sample.channel,
-                status: "Active",
-                notes: [],
-              },
-              select: { id: true },
-            });
-            campaignId = created.id;
-            existingMap.set(key, { id: created.id });
-            campaignsCreated++;
-          }
+          campaignId = created.id;
+          existingMap.set(key, { id: created.id });
+          campaignsCreated++;
         }
       }
 
