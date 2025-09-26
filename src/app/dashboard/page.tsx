@@ -279,6 +279,10 @@ function DashboardInner() {
       } catch {}
     }, [settings]);
 
+    useEffect(() => {
+      if (selected) setPayloadOpen(false);
+    }, [selected]);
+
 
     const urlState = useMemo(() => ({
       client: clientId || null,
@@ -715,19 +719,27 @@ function DashboardInner() {
 
       {/* Modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setSelected(null)}>
+        <div
+          className="fixed inset-0 bg-black/40 p-4 grid place-items-center overflow-y-auto"
+          onClick={() => setSelected(null)}
+          role="dialog"
+          aria-modal="true"
+        >
           <div
-            className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-5"
+            className="bg-white mt-10 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4">
+            {/* Header */}
+            <div className="px-5 py-4 border-b flex items-start justify-between gap-4">
               <div>
                 <div className="text-sm text-gray-500">{selected.channel}</div>
                 <div className="text-xl font-semibold">{selected.name}</div>
               </div>
-              <button className="text-gray-400" onClick={() => setSelected(null)}>✕</button>
+              <button className="text-gray-400" onClick={() => setSelected(null)} aria-label="Close">✕</button>
             </div>
-            <div className="mt-4 space-y-3">
+
+            {/* Scrollable content */}
+            <div className="px-5 py-4 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="p-2 rounded-lg bg-gray-50">
                   <div className="text-gray-500">Spend</div>
@@ -750,9 +762,7 @@ function DashboardInner() {
               <div className="text-sm">
                 <div className="text-gray-500 mb-1">Notes</div>
                 <ul className="list-disc ml-5 space-y-1">
-                  {selected.notes?.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
+                  {selected.notes?.map((n, i) => <li key={i}>{n}</li>)}
                 </ul>
               </div>
 
@@ -761,7 +771,7 @@ function DashboardInner() {
                 {selected.recommendation ? (
                   <div className="space-y-1">
                     <RecommendationPill rec={selected.recommendation} />
-                    <div className="">{selected.recommendation.reason}</div>
+                    <div>{selected.recommendation.reason}</div>
                     {selected.recommendation.risk && (
                       <div className="text-amber-700 text-xs">Potential risk: {selected.recommendation.risk}</div>
                     )}
@@ -770,45 +780,61 @@ function DashboardInner() {
                   <div className="text-gray-500">No current recommendations</div>
                 )}
               </div>
-              {/* Payload (draft) */}
-              <div className="text-sm">
-                <div className="text-gray-500 mb-1">Payload (draft)</div>
-                {actionJson ? (
-                  <div className="rounded-lg border bg-gray-50 p-2">
-                    <pre className="text-xs overflow-auto max-h-64 leading-5">{actionJson}</pre>
-                    <div className="mt-2 flex items-center justify-end gap-2">
-                      <button
-                        className="px-3 py-1.5 rounded-xl border text-xs"
-                        onClick={() => navigator.clipboard.writeText(actionJson).catch(() => {})}
-                      >
-                        Copy JSON
-                      </button>
+
+              {/* Collapsible Payload */}
+              <div className="text-sm border rounded-xl">
+                <button
+                  className="w-full px-3 py-2 flex items-center justify-between"
+                  onClick={() => setPayloadOpen((v) => !v)}
+                  aria-expanded={payloadOpen}
+                >
+                  <span className="text-gray-600">Payload (draft)</span>
+                  <span className="text-gray-500">{payloadOpen ? "▴" : "▾"}</span>
+                </button>
+
+                {payloadOpen && (
+                  <div className="px-3 pb-3">
+                    {actionJson ? (
+                      <div className="rounded-lg border bg-gray-50 p-2">
+                        <pre className="text-xs overflow-auto max-h-64 leading-5">{actionJson}</pre>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <button
+                            className="px-3 py-1.5 rounded-xl border text-xs"
+                            onClick={() => navigator.clipboard.writeText(actionJson).catch(() => {})}
+                          >
+                            Copy JSON
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 px-1 pb-2">No changes to generate.</div>
+                    )}
+                    <div className="text-xs text-amber-700 mt-1">
+                      This is a demo draft. In real mode, it will be sent to the backend as a dry-run before applying..
                     </div>
                   </div>
-                ) : (
-                  <div className="text-gray-500">No changes to generate.</div>
                 )}
-                <div className="text-xs text-amber-700 mt-1">
-                  This is a demo draft. In real mode, it will be sent to the backend as a dry-run before applying.
-                </div>
               </div>
-
             </div>
 
-            <div className="mt-5 flex items-center justify-end gap-2">
+            {/* Footer (fixed in modal) */}
+            <div className="px-5 py-3 border-t flex items-center justify-end gap-2">
               <button className="px-3 py-2 rounded-xl border" onClick={() => setSelected(null)}>
                 Close
               </button>
-              <button
-                className="px-3 py-2 rounded-xl bg-gray-900 text-white"
-                onClick={() => setSelected(null)}
-              >
-                Apply recommendation
-              </button>
+              {!readOnly && (
+                <button
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white"
+                  onClick={() => setSelected(null)}
+                >
+                  Apply recommendation
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
+
       {settingsOpen && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setSettingsOpen(false)}>
           <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-5" onClick={(e) => e.stopPropagation()}>
