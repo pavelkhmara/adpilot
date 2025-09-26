@@ -1,7 +1,7 @@
 'use client';
-
-import { useMemo, useState, useEffect } from "react";
-import { ReadonlyURLSearchParams, useRouter, useSearchParams } from "next/navigation";
+export const dynamic = 'force-dynamic';
+import { Suspense, useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Channel = "Google Ads" | "Meta Ads";
 type RecType = "hold" | "pause" | "scale" | "creative";
@@ -204,7 +204,7 @@ function SkeletonRow() {
 }
 
 
-export default function AdPilotMockUI() {
+function DashboardInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -644,5 +644,13 @@ export default function AdPilotMockUI() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <DashboardInner />
+    </Suspense>
   );
 }
