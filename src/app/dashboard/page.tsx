@@ -63,6 +63,58 @@ const DEFAULT_SETTINGS: DemoSettings = {
   lowCtrThreshold: 0.02,
 };
 
+interface ActionPayload {
+  clientId: ClientId;
+  channel: Channel;
+  campaignId: string;
+  recommendation: RecType;
+  change:
+    | { op: "pause" }
+    | { op: "budget_increase"; byPercent: number }
+    | { op: "rotate_creatives" };
+  meta: {
+    generatedAt: string;    // ISO
+    dryRun: boolean;        // для безопасности
+    source: "ui-demo";
+  };
+}
+
+function buildActionPayload(c: DerivedCampaign, clientId: ClientId): ActionPayload | null {
+  const rec = c.recommendation;
+  if (!rec) return null;
+  if (rec.type === "pause") {
+    return {
+      clientId,
+      channel: c.channel,
+      campaignId: c.id,
+      recommendation: rec.type,
+      change: { op: "pause" },
+      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
+    };
+  }
+  if (rec.type === "scale" && rec.action && rec.action.kind === "increase_budget") {
+    return {
+      clientId,
+      channel: c.channel,
+      campaignId: c.id,
+      recommendation: rec.type,
+      change: { op: "budget_increase", byPercent: Math.round((rec.action.by ?? 0) * 100) },
+      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
+    };
+  }
+  if (rec.type === "creative") {
+    return {
+      clientId,
+      channel: c.channel,
+      campaignId: c.id,
+      recommendation: rec.type,
+      change: { op: "rotate_creatives" },
+      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
+    };
+  }
+  return null;
+}
+
 
 
 function computeDerived(c: Campaign, s: DemoSettings = DEFAULT_SETTINGS): DerivedCampaign {
@@ -194,6 +246,10 @@ function DashboardInner() {
       return (["acme","orbit","nova","zen"] as const).includes(v) ? v : "acme";
     });
     const [readOnly, setReadOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
+    const [actionJson, setActionJson] = useState<string | null>(null);
+    const [payloadOpen, setPayloadOpen] = useState(false);
+
+
 
 
     useEffect(() => {
@@ -347,6 +403,10 @@ function DashboardInner() {
       title: rec?.title || "no-op",
     };
     setAudit((prev) => [entry, ...prev]);
+
+    const payload = buildActionPayload(c, clientId);
+    setActionJson(payload ? JSON.stringify(payload, null, 2) : null);
+
     setSelected(c);
   }
 
@@ -600,7 +660,11 @@ function DashboardInner() {
                         <td className="p-3"><RecommendationPill rec={c.recommendation} /></td>
                         <td className="p-3 text-right">
                         <div className="flex justify-end gap-2">
-                            <button onClick={() => setSelected(c)} className="px-3 py-1.5 rounded-xl border">
+                            <button onClick={() => { 
+                                  setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
+                                }}
+                                className="px-3 py-1.5 rounded-xl border"
+                            >
                             More
                             </button>
                             {!readOnly && (
@@ -706,6 +770,29 @@ function DashboardInner() {
                   <div className="text-gray-500">No current recommendations</div>
                 )}
               </div>
+              {/* Payload (draft) */}
+              <div className="text-sm">
+                <div className="text-gray-500 mb-1">Payload (draft)</div>
+                {actionJson ? (
+                  <div className="rounded-lg border bg-gray-50 p-2">
+                    <pre className="text-xs overflow-auto max-h-64 leading-5">{actionJson}</pre>
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                      <button
+                        className="px-3 py-1.5 rounded-xl border text-xs"
+                        onClick={() => navigator.clipboard.writeText(actionJson).catch(() => {})}
+                      >
+                        Copy JSON
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500">No changes to generate.</div>
+                )}
+                <div className="text-xs text-amber-700 mt-1">
+                  This is a demo draft. In real mode, it will be sent to the backend as a dry-run before applying.
+                </div>
+              </div>
+
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-2">
