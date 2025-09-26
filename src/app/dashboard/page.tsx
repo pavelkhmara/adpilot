@@ -1,8 +1,9 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { Suspense, useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getCampaigns, type CampaignDTO, type Channel, type ClientId } from "@/lib/adpilot";
+
 
 
 const CLIENTS: { id: ClientId; name: string }[] = [
@@ -248,6 +249,11 @@ function DashboardInner() {
     const [readOnly, setReadOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
     const [actionJson, setActionJson] = useState<string | null>(null);
     const [payloadOpen, setPayloadOpen] = useState(false);
+    const [showHotkeys, setShowHotkeys] = useState(false);
+    const searchRef = useRef<HTMLInputElement | null>(null);
+
+    type Toast = { id: string; text: string };
+    const [toasts, setToasts] = useState<Toast[]>([]);
 
 
 
@@ -282,6 +288,41 @@ function DashboardInner() {
     useEffect(() => {
       if (selected) setPayloadOpen(false);
     }, [selected]);
+
+    useEffect(() => {
+      const onKey = (e: KeyboardEvent) => {
+        // Esc — close campaign modal/hint
+        if (e.key === "Escape") {
+          if (selected) setSelected(null);
+          if (settingsOpen) setSettingsOpen(false);
+          if (showHotkeys) setShowHotkeys(false);
+        }
+
+        // "/" — focus search (if not already typing in input)
+        if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+          if (tag !== "input" && tag !== "textarea") {
+            e.preventDefault();
+            searchRef.current?.focus();
+          }
+        }
+
+        // Ctrl/Cmd + K — open settings
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          setSettingsOpen(true);
+        }
+
+        // "?" — show keyboard shortcuts help (Shift + / usually produces "?")
+        if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+          e.preventDefault();
+          setShowHotkeys((v) => !v);
+        }
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [selected, settingsOpen, showHotkeys]);
+
 
 
     const urlState = useMemo(() => ({
@@ -326,7 +367,11 @@ function DashboardInner() {
         }
     }
 
-
+    function pushToast(text: string, ms = 2500) {
+      const id = Math.random().toString(36).slice(2);
+      setToasts((t) => [{ id, text }, ...t]);
+      setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
+    }
 
   const data = useMemo<DerivedCampaign[]>(
     () => rawCampaigns.map((c) => computeDerived(c, settings)),
@@ -423,8 +468,10 @@ function DashboardInner() {
         q: query || undefined,
       });
       setRawCampaigns(data);
+      pushToast("Data updated");
     } catch {
-      setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later.")
+      setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later.");
+      pushToast("Data update error");
     } finally {
       setRefreshing(false);
     }
@@ -458,8 +505,9 @@ function DashboardInner() {
     }
 
     function onExportCsv() {
-    const csv = toCsv(sorted);
-    download(`adpilot_campaigns_${new Date().toISOString().slice(0,10)}.csv`, csv);
+      const csv = toCsv(sorted);
+      download(`adpilot_campaigns_${new Date().toISOString().slice(0,10)}.csv`, csv);
+      pushToast("CSV exported");
     }
 
 
@@ -494,7 +542,7 @@ function DashboardInner() {
                 className="px-3 py-1.5 rounded-xl border text-sm"
                 onClick={() => {
                   const link = buildReadonlyLink();
-                  navigator.clipboard.writeText(link).catch(() => {});
+                  navigator.clipboard.writeText(link).then(() => pushToast("Read-only link copied")).catch(() => {});
                 }}
                 title="Copy read-only link"
               >
@@ -575,25 +623,30 @@ function DashboardInner() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Searching for campaigns…"
-              className="px-3 py-2 rounded-xl border w-64"
-            />
-            <button
-              className="px-3 py-2 rounded-xl border text-sm"
-              onClick={() => {
-                setQuery("");
-                setChannelFilter("All");
-                setSortBy(null);
-                setSortDir("desc");
-              }}
-              title="Reset filters and sort"
-            >
-              Reset
-            </button>
+          <div className="grid col">
+            <div className="flex items-center align-top gap-2">
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Searching for campaigns…"
+                className="px-3 py-2 rounded-xl border w-64"
+              />
+
+              <button
+                className="px-3 py-2 rounded-xl border text-sm"
+                onClick={() => {
+                  setQuery("");
+                  setChannelFilter("All");
+                  setSortBy(null);
+                  setSortDir("desc");
+                }}
+                title="Reset filters and sort"
+              >
+                Reset
+              </button>
+            </div>
+            <div className="text-xs text-gray-400">Press «/» to search</div>
           </div>
         </section>
 
@@ -800,7 +853,7 @@ function DashboardInner() {
                         <div className="mt-2 flex items-center justify-end gap-2">
                           <button
                             className="px-3 py-1.5 rounded-xl border text-xs"
-                            onClick={() => navigator.clipboard.writeText(actionJson).catch(() => {})}
+                            onClick={() => navigator.clipboard.writeText(actionJson).then(() => pushToast("JSON copied")).catch(() => {})}
                           >
                             Copy JSON
                           </button>
@@ -926,6 +979,44 @@ function DashboardInner() {
           </div>
         </div>
       )}
+      {showHotkeys && (
+        <div
+          className="fixed inset-0 bg-black/40 p-4 grid place-items-center"
+          onClick={() => setShowHotkeys(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <div className="text-lg font-semibold">Hot keys</div>
+              <button className="text-gray-400" onClick={() => setShowHotkeys(false)} aria-label="Close">✕</button>
+            </div>
+            <div className="px-5 py-4 text-sm">
+              <ul className="space-y-2">
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50">/</kbd> — focus search</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50">Esc</kbd> — close modal/hint</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50">Ctrl</kbd>/<kbd className="px-2 py-1 rounded border bg-gray-50">⌘</kbd> + <kbd className="px-2 py-1 rounded border bg-gray-50">K</kbd> — open settings</li>
+                <li><kbd className="px-2 py-1 rounded border bg-gray-50">?</kbd> — show keyboard shortcuts help</li>
+              </ul>
+            </div>
+            <div className="px-5 py-3 border-t text-right">
+              <button className="px-3 py-2 rounded-xl border" onClick={() => setShowHotkeys(false)}>Ok</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Toasts */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((t) => (
+          <div key={t.id} className="rounded-xl bg-indigo-500 text-white text-sm px-3 py-2 shadow-lg border border-indigo-600">
+            {t.text}
+          </div>
+        ))}
+      </div>
+
 
     </div>
   );
