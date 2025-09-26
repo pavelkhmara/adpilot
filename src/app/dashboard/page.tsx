@@ -193,6 +193,8 @@ function DashboardInner() {
       const v = (searchParams.get("client") as ClientId) ?? "acme";
       return (["acme","orbit","nova","zen"] as const).includes(v) ? v : "acme";
     });
+    const [readOnly, setReadOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
+
 
     useEffect(() => {
       let alive = true;
@@ -222,25 +224,30 @@ function DashboardInner() {
     }, [settings]);
 
 
-    const urlState = useMemo(() => {
-        return {
-            client: clientId || null,
-            q: query || null,
-            channel: channelFilter === "All" ? null : channelFilter,
-            sort: sortBy || null,
-            dir: sortBy ? sortDir : null,
-        } as Record<string, string | null>;
-        }, [ clientId, query, channelFilter, sortBy, sortDir ]);
+    const urlState = useMemo(() => ({
+      client: clientId || null,
+      q: query || null,
+      channel: channelFilter === "All" ? null : channelFilter,
+      sort: sortBy || null,
+      dir: sortBy ? sortDir : null,
+      mode: readOnly ? "ro" : null,
+    }), [clientId, query, channelFilter, sortBy, sortDir, readOnly]);
 
-        useEffect(() => {
-        const params = new URLSearchParams();
-        Object.entries(urlState).forEach(([k, v]) => {
-            if (v != null && v !== "") params.set(k, v);
-        });
-        const qs = params.toString();
-        router.replace(qs ? `?${qs}` : "");
+
+    useEffect(() => {
+      const params = new URLSearchParams();
+      Object.entries(urlState).forEach(([k, v]) => {
+          if (v != null && v !== "") params.set(k, v);
+      });
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : "");
     }, [urlState, router]);
 
+
+    function onChannelClick(ch: "All" | Channel) {
+      if (channelFilter === ch) setChannelFilter("All");
+      else setChannelFilter(ch);
+    }
 
     function toggleSort(col: "spend" | "revenue" | "roas" | "cpa" | "ctr") {
         if (sortBy === col) {
@@ -315,6 +322,21 @@ function DashboardInner() {
     };
   }, [filtered]);
 
+  function buildReadonlyLink(): string {
+    const params = new URLSearchParams();
+    if (clientId) params.set("client", clientId);
+    if (query) params.set("q", query);
+    if (channelFilter !== "All") params.set("channel", channelFilter);
+    if (sortBy) {
+      params.set("sort", sortBy);
+      params.set("dir", sortDir);
+    }
+    params.set("mode", "ro");
+    const qs = params.toString();
+    return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
+  }
+
+
   function onGenerateAction(c: DerivedCampaign) {
     const rec = c.recommendation;
     const entry: AuditEntry = {
@@ -386,21 +408,36 @@ function DashboardInner() {
             <div className="w-8 h-8 rounded-2xl bg-black text-white grid place-items-center font-bold">A</div>
             <div className="font-semibold">AdPilot</div>
             <Badge tone="blue">Mock / without API</Badge>
+            {readOnly && <Badge tone="amber">Read-only</Badge>}
           </div>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-sm" onClick={onRefresh}>
-              {refreshing ? "Updating…" : "Refresh data"}
-            </button>
-            <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
-                Export CSV
-            </button>
-            <button
-              className="px-3 py-1.5 rounded-xl border text-sm"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Open demo settings"
-            >
-              ⚙️
-            </button>
+            {!readOnly && (
+              <>
+              <button className="px-3 py-1.5 rounded-xl bg-gray-900 text-white text-sm" onClick={onRefresh}>
+                {refreshing ? "Updating…" : "Refresh data"}
+              </button>
+              <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
+                  Export CSV
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-xl border text-sm"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Open demo settings"
+              >
+                ⚙️
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-xl border text-sm"
+                onClick={() => {
+                  const link = buildReadonlyLink();
+                  navigator.clipboard.writeText(link).catch(() => {});
+                }}
+                title="Copy read-only link"
+              >
+                Share (read-only)
+              </button>
+              </>
+            )}
             <select
               className="px-3 py-1.5 rounded-xl border text-sm"
               value={clientId}
@@ -465,7 +502,7 @@ function DashboardInner() {
             {(["All", "Google Ads", "Meta Ads"] as const).map((ch) => (
               <button
                 key={ch}
-                onClick={() => setChannelFilter(ch)}
+                onClick={() => onChannelClick(ch)}
                 className={`px-3 py-1.5 rounded-full text-sm border ${
                   channelFilter === ch ? "bg-gray-900 text-white" : "bg-white"
                 }`}
@@ -481,6 +518,18 @@ function DashboardInner() {
               placeholder="Searching for campaigns…"
               className="px-3 py-2 rounded-xl border w-64"
             />
+            <button
+              className="px-3 py-2 rounded-xl border text-sm"
+              onClick={() => {
+                setQuery("");
+                setChannelFilter("All");
+                setSortBy(null);
+                setSortDir("desc");
+              }}
+              title="Reset filters and sort"
+            >
+              Reset
+            </button>
           </div>
         </section>
 
@@ -554,9 +603,11 @@ function DashboardInner() {
                             <button onClick={() => setSelected(c)} className="px-3 py-1.5 rounded-xl border">
                             More
                             </button>
-                            <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white">
-                            Generate action
-                            </button>
+                            {!readOnly && (
+                              <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white">
+                              Generate action
+                              </button>
+                            )}
                         </div>
                         </td>
                     </tr>
@@ -567,6 +618,7 @@ function DashboardInner() {
         </section>
 
         {/* Audit log */}
+        {!readOnly && (
         <section className="rounded-2xl border bg-white p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="font-medium">Activity Journal (local, mock)</div>
@@ -594,6 +646,7 @@ function DashboardInner() {
             </ul>
           )}
         </section>
+        )}
       </main>
 
       {/* Modal */}

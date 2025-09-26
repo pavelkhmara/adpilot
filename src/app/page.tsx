@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main className="min-h-screen grid place-items-center p-6 bg-gray-50">
       <div className="max-w-xl w-full rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">AdPilot — MVP</h1>
+        <h1 className="text-2xl font-semibold">AdPilot</h1>
         <p className="text-gray-600 mt-2">
           Clickable mockup of an ad campaign recommendations panel.
         </p>
