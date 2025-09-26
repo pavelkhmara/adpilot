@@ -2,8 +2,9 @@
 export const dynamic = 'force-dynamic';
 import { Suspense, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getCampaigns, type CampaignDTO, type Channel } from "@/lib/adpilot";
 
-type Channel = "Google Ads" | "Meta Ads";
+
 type RecType = "hold" | "pause" | "scale" | "creative";
 type Tone = "gray" | "green" | "red" | "amber" | "blue";
 
@@ -21,20 +22,7 @@ interface Recommendation {
   action: RecAction;
 }
 
-interface Campaign {
-  id: string;
-  channel: Channel;
-  name: string;
-  status: "Active" | "Learning" | "Paused";
-  spend: number;
-  clicks: number;
-  impressions: number;
-  conversions: number;
-  revenue: number;
-  frequency: number;
-  ctr: number; // 0..1
-  notes?: string[];
-}
+type Campaign = CampaignDTO;
 
 interface DerivedCampaign extends Campaign {
   roas: number;
@@ -69,66 +57,6 @@ const DEFAULT_SETTINGS: DemoSettings = {
 };
 
 
-
-// --- Mock data --------------------------------------------------------------
-const MOCK_CAMPAIGNS: Campaign[] = [
-  {
-    id: "g-1",
-    channel: "Google Ads",
-    name: "Brand Search PL",
-    status: "Active",
-    spend: 1240.5,
-    clicks: 3200,
-    impressions: 120000,
-    conversions: 96,
-    revenue: 7420,
-    frequency: 1.2,
-    ctr: 0.026,
-    notes: ["Stable ROAS", "Low CPA"],
-  },
-  {
-    id: "m-1",
-    channel: "Meta Ads",
-    name: "Prospecting - Lookalike 1%",
-    status: "Active",
-    spend: 2100,
-    clicks: 5100,
-    impressions: 390000,
-    conversions: 58,
-    revenue: 5200,
-    frequency: 2.7,
-    ctr: 0.013,
-    notes: ["Fatigue risk: high freq", "ROAS below target"],
-  },
-  {
-    id: "g-2",
-    channel: "Google Ads",
-    name: "Performance Max EU",
-    status: "Learning",
-    spend: 3120,
-    clicks: 4200,
-    impressions: 210000,
-    conversions: 72,
-    revenue: 6100,
-    frequency: 1.1,
-    ctr: 0.02,
-    notes: ["In Learning", "Give 3-5 days"],
-  },
-  {
-    id: "m-2",
-    channel: "Meta Ads",
-    name: "Retargeting 30d",
-    status: "Active",
-    spend: 780,
-    clicks: 2200,
-    impressions: 54000,
-    conversions: 85,
-    revenue: 6900,
-    frequency: 1.8,
-    ctr: 0.041,
-    notes: ["High ROAS", "Scale opportunity"],
-  },
-];
 
 function computeDerived(c: Campaign, s: DemoSettings = DEFAULT_SETTINGS): DerivedCampaign {
   const roas = c.revenue && c.spend ? c.revenue / c.spend : 0;
@@ -253,6 +181,27 @@ function DashboardInner() {
       }
     });
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [rawCampaigns, setRawCampaigns] = useState<Campaign[]>([]);
+
+    useEffect(() => {
+      let alive = true;
+      (async () => {
+        setRefreshing(true);
+        setErrorMsg(null);
+        try {
+          const data = await getCampaigns({
+            channel: channelFilter === "All" ? undefined : channelFilter,
+            q: query || undefined,
+          });
+          if (alive) setRawCampaigns(data);
+        } catch (e) {
+          if (alive) setErrorMsg(`Failed to load campaigns (demo API). ${e}`);
+        } finally {
+          if (alive) setRefreshing(false);
+        }
+      })();
+      return () => { alive = false; };
+    }, [channelFilter, query]);
 
     useEffect(() => {
       try {
@@ -300,8 +249,8 @@ function DashboardInner() {
 
 
   const data = useMemo<DerivedCampaign[]>(
-    () => MOCK_CAMPAIGNS.map((c) => computeDerived(c, settings)),
-    [settings]
+    () => rawCampaigns.map((c) => computeDerived(c, settings)),
+    [rawCampaigns, settings]
   );
 
   const filtered = useMemo(
@@ -366,12 +315,20 @@ function DashboardInner() {
     setSelected(c);
   }
 
-  function onRefresh() {
+  async function onRefresh() {
     setRefreshing(true);
     setErrorMsg(null);
-    // setTimeout(() => setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later."), 1000);
-
-    setTimeout(() => setRefreshing(false), 800);
+    try {
+      const data = await getCampaigns({
+        channel: channelFilter === "All" ? undefined : channelFilter,
+        q: query || undefined,
+      });
+      setRawCampaigns(data);
+    } catch {
+      setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later.")
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   function toCsv(rows: DerivedCampaign[]) {
@@ -414,7 +371,7 @@ function DashboardInner() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-2xl bg-black text-white grid place-items-center font-bold">A</div>
-            <div className="font-semibold">AdPilot — MVP</div>
+            <div className="font-semibold">AdPilot</div>
             <Badge tone="blue">Mock / without API</Badge>
           </div>
           <div className="flex items-center gap-2">
