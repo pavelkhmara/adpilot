@@ -4,53 +4,86 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
-
 model Client {
-  id        String   @id @default(cuid())
-  key       String   @unique // acme, orbit, nova, zen
-  name      String
-  createdAt DateTime @default(now()) @db.Timestamptz
-  campaigns Campaign[]
+  id          String       @id @default(cuid())
+  key         String       @unique // acme, orbit, nova, zen
+  name        String
+  createdAt   DateTime     @default(now()) @db.Timestamptz
+  campaigns   Campaign[]
+  connections Connection[]
 }
 
 model Campaign {
-  id          String   @id @default(cuid())
-  externalId  String?  // опционально id из Ads
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  channel     String   // "Google Ads" | "Meta Ads"
-  name        String
-  status      String   // "Active" | "Learning" | "Paused"
-  notes       String[] // text[]
-  metrics     MetricDaily[]
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz
+  id         String        @id @default(cuid())
+  externalId String? // optional id from Ads
+  clientId   String
+  client     Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  channel    String // "Google Ads" | "Meta Ads"
+  name       String
+  status     String // "Active" | "Learning" | "Paused"
+  notes      String[] // text[]
+  metrics    MetricDaily[]
+  createdAt  DateTime      @default(now()) @db.Timestamptz
+  updatedAt  DateTime      @default(now()) @updatedAt @db.Timestamptz
+
+  @@unique([clientId, name, channel], name: "clientId_name_channel")
   @@index([clientId, channel])
   @@index([name])
-  @@unique([clientId, name, channel], name: "clientId_name_channel")
 }
 
 model MetricDaily {
-  id          String   @id @default(cuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
-  date        DateTime @db.Date
+  date DateTime @db.Date
 
   impressions Int
   clicks      Int
-  spend       Decimal  @db.Decimal(18,2)
+  spend       Decimal @db.Decimal(18, 2)
   conversions Int
-  revenue     Decimal  @db.Decimal(18,2)
-  frequency   Decimal  @db.Decimal(6,2)
-  ctr         Decimal  @db.Decimal(6,4) // 0..1
+  revenue     Decimal @db.Decimal(18, 2)
+  frequency   Decimal @db.Decimal(6, 2)
+  ctr         Decimal @db.Decimal(6, 4) // 0..1
 
-  @@index([date])
   @@unique([campaignId, date], name: "campaignId_date")
+  @@index([date])
 }
 
+enum Provider {
+  GOOGLE_ADS
+  META_ADS
+  GA4
+}
+
+enum ConnectionMode {
+  demo
+  live
+}
+
+enum ConnectionStatus {
+  disconnected
+  connected
+}
+
+model Connection {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  provider Provider
+  status   ConnectionStatus @default(disconnected)
+  mode     ConnectionMode   @default(demo)
+
+  externalAccountRef String?
+  createdAt          DateTime @default(now()) @db.Timestamptz
+  updatedAt          DateTime @updatedAt @db.Timestamptz
+
+  @@index([clientId, provider])
+}
