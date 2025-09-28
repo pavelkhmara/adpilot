@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { CampaignRow } from "./CampaignRow";
-import { CampaignRow as CampaignRowData} from "@/lib/types";
+import { CampaignRow as CampaignRowData} from "../../../lib/types";
 import SkeletonRow from "../SkeletonRow";
 
 type SortKey =

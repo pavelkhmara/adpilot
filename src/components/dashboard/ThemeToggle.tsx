@@ -1,5 +1,5 @@
 "use client";
-import { useThemeMode, type ThemeMode } from "@/features/campaigns/hooks/useThemeMode";
+import { useThemeMode, type ThemeMode } from "../../features/campaigns/hooks/useThemeMode";
 
 export default function ThemeToggle() {
   const { theme, setTheme, mounted } = useThemeMode();

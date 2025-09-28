@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { addDays, fmt, isValidYmd } from "@/lib/dates";
-import { Channel } from "@/lib/types";
+import { addDays, fmt, isValidYmd } from "../../lib/dates";
+import { Channel } from "../../lib/types";
 
 export type ClientOption = { id: string; name: string };
 

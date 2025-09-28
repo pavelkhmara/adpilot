@@ -1,4 +1,4 @@
-import { Trend } from '@/lib/types';
+import { Trend } from '../../lib/types';
 import React from 'react'
 
 export default function Kpi({ label, value, trend, inverse }: { label: string; value: string; trend?: Trend; inverse?: boolean }) {

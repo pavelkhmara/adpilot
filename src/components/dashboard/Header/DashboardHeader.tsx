@@ -1,7 +1,7 @@
 import React from 'react'
-import Badge from '@/components/UI/Badge'
-import { toClientId } from '@/lib/utils'
-import type { ClientId } from "@/lib/types";
+import Badge from '../../../components/UI/Badge'
+import { toClientId } from '../../../lib/utils'
+import type { ClientId } from "../../../lib/types";
 
 type ClientOption = { id: ClientId; name: string };
 

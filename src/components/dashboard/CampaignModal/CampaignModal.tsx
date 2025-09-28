@@ -1,12 +1,12 @@
 "use client";
-import RecBadge from "@/components/UI/RecBadge";
-import StatusBadge from "@/components/UI/StatusBadge";
-import { Status, RecType, Trend, Channel, Recommendation } from "@/lib/types";
+import RecBadge from "../../../components/UI/RecBadge";
+import StatusBadge from "../../../components/UI/StatusBadge";
+import { Status, RecType, Trend, Channel, Recommendation } from "../../../lib/types";
 import React, { useEffect, useMemo, useState } from "react";
 import Kpi from "../Kpi";
-import { fmtInt, fmtMoney, safeStringify } from "@/lib/utils";
-import Collapsible from "@/components/UI/Collapsible";
-import Badge from "@/components/UI/Badge";
+import { fmtInt, fmtMoney, safeStringify } from "../../../lib/utils";
+import Collapsible from "../../../components/UI/Collapsible";
+import Badge from "../../../components/UI/Badge";
 import { BarChart, Bar, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export type CampaignModalData = {

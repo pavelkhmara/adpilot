@@ -1,5 +1,5 @@
 "use client";
-import { CampaignRow as CampaignRowData, Channel, RecType, Status, Trend } from "@/lib/types";
+import { CampaignRow as CampaignRowData, Channel, RecType, Status, Trend } from "../../../lib/types";
 import React from "react";
 
 

@@ -1,6 +1,6 @@
 "use client";
 import React, { useRef, useState } from "react";
-import { importCsv } from "@/features/campaigns/api";
+import { importCsv } from "../../features/campaigns/api";
 
 export type ClientOption = { id: string; name: string };
 

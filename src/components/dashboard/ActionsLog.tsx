@@ -1,6 +1,6 @@
 import React from 'react'
 import Badge from '../UI/Badge'
-import { Channel } from '@/lib/types';
+import { Channel } from '../../lib/types';
 
 export type ActionEntry = {
   ts: string;
