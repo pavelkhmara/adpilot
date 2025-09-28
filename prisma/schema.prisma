@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 
@@ -13,7 +14,7 @@ model Client {
   id        String   @id @default(cuid())
   key       String   @unique // acme, orbit, nova, zen
   name      String
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz
   campaigns Campaign[]
 }
 
@@ -27,9 +28,11 @@ model Campaign {
   status      String   // "Active" | "Learning" | "Paused"
   notes       String[] // text[]
   metrics     MetricDaily[]
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz
   @@index([clientId, channel])
   @@index([name])
-  @@unique([clientId, name, channel])
+  @@unique([clientId, name, channel], name: "clientId_name_channel")
 }
 
 model MetricDaily {
@@ -47,7 +50,7 @@ model MetricDaily {
   frequency   Decimal  @db.Decimal(6,2)
   ctr         Decimal  @db.Decimal(6,4) // 0..1
 
-  @@unique([campaignId, date])
   @@index([date])
+  @@unique([campaignId, date], name: "campaignId_date")
 }
 
