@@ -1,4 +1,4 @@
-import { RecType } from '@/lib/types';
+import { RecType } from '../../lib/types';
 import React from 'react'
 
 export default function RecBadge({ type, text }: { type: RecType; text: string }) {
