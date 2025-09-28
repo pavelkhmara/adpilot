@@ -31,6 +31,7 @@ model Campaign {
   metrics    MetricDaily[]
   createdAt  DateTime      @default(now()) @db.Timestamptz
   updatedAt  DateTime      @default(now()) @updatedAt @db.Timestamptz
+  recommendations Recommendation[]
 
   @@unique([clientId, name, channel], name: "clientId_name_channel")
   @@index([clientId, channel])
@@ -87,4 +88,25 @@ model Connection {
 
   @@index([clientId, provider])
   @@unique([clientId, provider], name: "client_provider_unique")
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+
+  campaignId  String
+  campaign    Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // простая схема без enum'ов, чтобы не упираться в рантайм
+  entityType String            // 'account' | 'campaign' | 'adset' | 'creative'
+  entityId   String?           // nullable для account-уровня
+  actionType String            // 'DecreaseBudgetByPct' | 'PauseCreative' | ...
+  payload    Json?             // параметры действия (например, { "pct": 10 })
+  reason     Json?             // объяснения/флаги (массив строк или объект)
+  priority   Int      @default(0)
+  status     String   @default("proposed") // 'proposed' | 'applied' | 'rejected'
+
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  @@index([campaignId])
 }
