@@ -13,10 +13,11 @@ function normalizeProvider(slug: string | undefined): Provider | null {
 
 export async function POST(
   req: Request,
-  context: { params: { provider?: string } }
+  context: { params: Promise<{ provider: string }> }
 ) {
   try {
-    const provider = normalizeProvider(context.params?.provider);
+    const { provider: providerSlug } = await context.params;
+    const provider = normalizeProvider(providerSlug);
     if (!provider) {
       return NextResponse.json({ error: "Unknown provider, expected 'google' or 'meta'" }, { status: 400 });
     }

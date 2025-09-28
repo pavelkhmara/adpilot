@@ -10,9 +10,10 @@ function normalizeProvider(slug: string | undefined): Provider | null {
   return null;
 }
 
-export async function POST(req: Request, ctx: { params: { provider?: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ provider: string }> }) {
   try {
-    const provider = normalizeProvider(ctx.params?.provider);
+    const { provider: providerSlug } = await ctx.params;
+    const provider = normalizeProvider(providerSlug);
     if (!provider) return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
 
     const { searchParams } = new URL(req.url);
