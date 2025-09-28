@@ -7,18 +7,27 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "ts-node -P tsconfig.seed.json --transpile-only scripts/seed.ts"
+    "db:seed": "ts-node -P tsconfig.seed.json --transpile-only scripts/seed.ts",
+    "migrate:deploy": "prisma migrate deploy",
+    "vercel-build": "npm run migrate:deploy && npm run build",
+    "ctx:full": "node ./make-context-pack.mjs",
+    "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
+    "db:check": "tsx scripts/db-check.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "@types/papaparse": "^5.3.16",
     "next": "15.5.4",
+    "papaparse": "^5.5.3",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "recharts": "^3.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -26,6 +35,8 @@
     "prisma": "^6.16.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "tsx": "^4.20.6",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

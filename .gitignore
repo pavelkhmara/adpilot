@@ -43,3 +43,12 @@ next-env.d.ts
 .env
 .env.local
 /src/generated/prisma
+
+*copy*.*
+*old*.*
+src/app/test
+/errors
+
+make-context-pack.mjs
+repo-context.config.json
+ctx-pack.md
