@@ -43,7 +43,7 @@ const FiltersBar = React.forwardRef<HTMLInputElement, Omit<Props, "searchRef"> &
   setImportOpen,
   resetSort,
   searchRef,
-}) {
+}, ref) {
   const [ onlyActive, setOnlyActive ] = useState(true);
 
   function applyPreset(p: "7d" | "14d" | "30d" | "mtd" | "prev m") {

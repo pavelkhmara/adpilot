@@ -48,7 +48,7 @@ export default function Alerts({
             <button
               className="text-left text-gray-700 hover:underline"
               onClick={() => onOpen(a.id)}
-              title="Открыть детали кампании"
+              title="Open campaign details"
             >
               <span className="text-gray-500">{a.channel}</span> — <strong>{a.name}</strong>
               {a.recommendation?.reason ? <> · {a.recommendation!.reason}</> : null}
