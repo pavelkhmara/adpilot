@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:seed": "ts-node -P tsconfig.seed.json --transpile-only scripts/seed.ts",
     "migrate:deploy": "prisma migrate deploy",
+    "postinstall": "prisma generate",
     "vercel-build": "npm run migrate:deploy && npm run build",
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
