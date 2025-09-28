@@ -28,44 +28,24 @@ export async function POST(
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
 
-    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
     if (!client) {
       await prisma.client.create({
         data: {
+          id: clientId,
           key: ['tape','kolo','lapa','milo','zora'][Math.random() * 5 | 0] + (Math.random() * 100 | 0),
           name: ['Big','New','The','Mega','Premium'][Math.random() * 5 | 0] + ' ' + ['Service','Solution','Company','Business','PRO Group'][Math.random() * 5 | 0],
         },
       });
     }
 
-    const found = await prisma.connection.findFirst({
-      where: { clientId, provider },
-      select: { id: true },
+    const externalAccountRef = provider === "GOOGLE_ADS" ? "demo-google-account" : "demo-meta-account";
+
+    await prisma.connection.upsert({
+      where: { client_provider_unique: { clientId, provider } },
+      update: { status: "connected", mode: "demo", externalAccountRef },
+      create: { clientId, provider, status: "connected", mode: "demo", externalAccountRef },
     });
-
-    const externalAccountRef =
-      provider === "GOOGLE_ADS" ? "demo-google-account" : "demo-meta-account";
-
-    if (found) {
-      await prisma.connection.update({
-        where: { id: found.id },
-        data: {
-          status: "connected",
-          mode: "demo",
-          externalAccountRef,
-        },
-      });
-    } else {
-      await prisma.connection.create({
-        data: {
-          clientId,
-          provider,
-          status: "connected",
-          mode: "demo",
-          externalAccountRef,
-        },
-      });
-    }
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

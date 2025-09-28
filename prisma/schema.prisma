@@ -86,4 +86,5 @@ model Connection {
   updatedAt          DateTime @updatedAt @db.Timestamptz
 
   @@index([clientId, provider])
+  @@unique([clientId, provider], name: "client_provider_unique")
 }
