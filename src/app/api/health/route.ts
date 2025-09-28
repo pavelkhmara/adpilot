@@ -14,7 +14,7 @@ export async function GET() {
     const err = e instanceof Error ? e : new Error(String(e));
     console.error("GET /api/health error:", err);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: err?.message },
       { status: 500 }
     );
   }
