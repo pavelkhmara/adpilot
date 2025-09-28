@@ -1,9 +1,27 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { Suspense, useMemo, useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { getCampaigns, type CampaignDTO, type Channel, type ClientId } from "@/lib/adpilot";
 
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { CampaignTable } from "../../components/dashboard/CampaignTable";
+import FiltersBar from "../../components/dashboard/FiltersBar";
+import Alerts from "../../components/dashboard/Alerts";
+import ImportCsvDialog from "../../components/dashboard/ImportCsvDialog";
+import { ToastsProvider, useToasts } from "../../components/dashboard/Toasts";
+import { CampaignModal } from "../../components/dashboard/CampaignModal";
+import type { CampaignModalData, CampaignAction } from "../../components/dashboard/CampaignModal";
+import { useUrlSync } from "../../features/campaigns/hooks/useUrlSync";
+import { useCampaigns } from "../../features/campaigns/hooks/useCampaigns";
+import DashboardHeader from "../../components/dashboard/Header/DashboardHeader";
+import KpiCard from "../../components/dashboard/KpiCard";
+import { CampaignRow, Channel, ClientId } from "../../lib/types";
+import { toClientId } from "../../lib/utils";
+import Connections from "../../components/dashboard/Connections";
+import ActionsLog, { type ActionEntry } from "../../components/dashboard/ActionsLog";
+import SettingsModal from "../../components/dashboard/SettingsModal";
+import HotKeysModal from "../../components/dashboard/HotKeysModal";
+
+// ----- constants / types -----
 
 
 const CLIENTS: { id: ClientId; name: string }[] = [
@@ -13,38 +31,10 @@ const CLIENTS: { id: ClientId; name: string }[] = [
   { id: "zen",   name: "Zen Home" },
 ];
 
-type RecType = "hold" | "pause" | "scale" | "creative";
-type Tone = "gray" | "green" | "red" | "amber" | "blue";
+const SORT_KEYS = ["channel","name","spend","revenue","roas","cpa","ctr","frequency","recommendation"] as const;
+type SortKey = typeof SORT_KEYS[number];
 
-type RecAction =
-  | { kind: "pause_campaign" }
-  | { kind: "increase_budget"; by: number }
-  | { kind: "rotate_creatives" }
-  | null;
 
-interface Recommendation {
-  type: RecType;
-  title: string;
-  reason: string;
-  risk?: string;
-  action: RecAction;
-}
-
-type Campaign = CampaignDTO;
-
-interface DerivedCampaign extends Campaign {
-  roas: number;
-  cpa: number | null;
-  recommendation: Recommendation | null;
-}
-
-interface AuditEntry {
-  ts: string;
-  campaign: string;
-  channel: Channel;
-  action: string;
-  title: string;
-}
 
 type DemoSettings = {
   minSpendForPause: number;
@@ -54,13 +44,7 @@ type DemoSettings = {
   fatigueFreq: number;
   lowCtrThreshold: number;
   columns?: {
-    spend: boolean;
-    revenue: boolean;
-    roas: boolean;
-    cpa: boolean;
-    ctr: boolean;
-    recommendation: boolean;
-    actions: boolean;
+    spend: boolean; revenue: boolean; roas: boolean; cpa: boolean; ctr: boolean; recommendation: boolean; actions: boolean;
   };
   compact?: boolean;
 };
@@ -72,471 +56,166 @@ const DEFAULT_SETTINGS: DemoSettings = {
   minConversionsForScale: 50,
   fatigueFreq: 2.5,
   lowCtrThreshold: 0.02,
-  columns: {
-    spend: true,
-    revenue: true,
-    roas: true,
-    cpa: true,
-    ctr: true,
-    recommendation: true,
-    actions: true,
-  },
+  columns: { spend: true, revenue: true, roas: true, cpa: true, ctr: true, recommendation: true, actions: true },
   compact: false,
 };
 
-interface ActionPayload {
-  clientId: ClientId;
-  channel: Channel;
-  campaignId: string;
-  recommendation: RecType;
-  change:
-    | { op: "pause" }
-    | { op: "budget_increase"; byPercent: number }
-    | { op: "rotate_creatives" };
-  meta: {
-    generatedAt: string;    // ISO
-    dryRun: boolean;        // для безопасности
-    source: "ui-demo";
-  };
+
+// ----- helper functions -----
+
+
+function toSortKey(v: string | null | undefined): SortKey | null {
+  return SORT_KEYS.includes(v as SortKey) ? (v as SortKey) : null;
 }
-
-function buildActionPayload(c: DerivedCampaign, clientId: ClientId): ActionPayload | null {
-  const rec = c.recommendation;
-  if (!rec) return null;
-  if (rec.type === "pause") {
-    return {
-      clientId,
-      channel: c.channel,
-      campaignId: c.id,
-      recommendation: rec.type,
-      change: { op: "pause" },
-      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
-    };
-  }
-  if (rec.type === "scale" && rec.action && rec.action.kind === "increase_budget") {
-    return {
-      clientId,
-      channel: c.channel,
-      campaignId: c.id,
-      recommendation: rec.type,
-      change: { op: "budget_increase", byPercent: Math.round((rec.action.by ?? 0) * 100) },
-      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
-    };
-  }
-  if (rec.type === "creative") {
-    return {
-      clientId,
-      channel: c.channel,
-      campaignId: c.id,
-      recommendation: rec.type,
-      change: { op: "rotate_creatives" },
-      meta: { generatedAt: new Date().toISOString(), dryRun: true, source: "ui-demo" },
-    };
-  }
-  return null;
+function toDir(v: string | null | undefined): "asc" | "desc" {
+  return v === "asc" || v === "desc" ? v : "desc";
 }
+// ----- page shell -----
 
-
-
-function computeDerived(c: Campaign, s: DemoSettings = DEFAULT_SETTINGS): DerivedCampaign {
-  const roas = c.revenue && c.spend ? c.revenue / c.spend : 0;
-  const cpa = c.conversions ? c.spend / c.conversions : null;
-
-  let recommendation: Recommendation | null = null;
-
-  // Simple heuristic rules for demo
-  if (c.status === "Learning") {
-    recommendation = {
-      type: "hold",
-      title: "Leave As Is: Learning Phase",
-      reason: "Campaign is in learning phase. Evaluate no earlier than 72 hours.",
-      action: null,
-      risk: "Premature changes will reset learning.",
-    };
-  } else if (roas < s.lowRoasThreshold && c.spend >= s.minSpendForPause && c.impressions > 50_000) {
-    recommendation = {
-      type: "pause",
-      title: "Check/Pause", 
-      reason: `High spending (≥ ${s.minSpendForPause}) with ROAS < ${s.lowRoasThreshold}`,
-      action: { kind: "pause_campaign" },
-      risk: "Possible conversion underreporting (lag).",
-    };
-  } else if (roas >= s.highRoasThreshold && c.conversions >= s.minConversionsForScale) {
-    recommendation = {
-      type: "scale",
-      title: "+15% to budget",
-      reason: `Consistently ROAS ≥ ${s.highRoasThreshold} and conversion volume ≥ ${s.minConversionsForScale}`,
-      action: { kind: "increase_budget", by: 0.15 },
-      risk: "Monitor stability for 48 hours.",
-    };
-  } else if (c.channel === "Meta Ads" && c.frequency > s.fatigueFreq && c.ctr < s.lowCtrThreshold) {
-    recommendation = {
-      type: "creative",
-      title: "Change creatives / reduce frequency",
-      reason: `High frequency (${c.frequency.toFixed(1)}) and declining CTR (< ${(s.lowCtrThreshold*100).toFixed(1)}%) - signs of ad fatigue`,
-      action: { kind: "rotate_creatives" },
-      risk: "Short-term performance drop during testing.",
-    };
-  }
-
-  return { ...c, roas, cpa, recommendation };
-}
-
-// --- UI components ----------------------------------------------------------
-function KpiCard({ label, value, hint }: { label: string, value: string, hint?: string }) {
+export default function DashboardPage() {
   return (
-    <div className="rounded-2xl shadow p-4 bg-white dark:bg-gray-800 flex flex-col gap-1">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="text-2xl font-semibold">{value}</div>
-      {hint ? <div className="text-xs text-gray-400">{hint}</div> : null}
-    </div>
+    <ToastsProvider>
+      <Suspense fallback={<div />}>
+        <DashboardInner />
+      </Suspense>
+    </ToastsProvider>
   );
 }
 
-function Badge({ children, tone = "gray" }: { children: React.ReactNode; tone?: Tone }) {
-  const map: Record<Tone, string> = {
-    gray: "bg-gray-100 text-gray-700",
-    green: "bg-green-100 text-green-700",
-    red: "bg-red-100 text-red-700",
-    amber: "bg-amber-100 text-amber-700",
-    blue: "bg-blue-100 text-blue-700",
-  };
-  return (
-    <span className={`px-2 py-1 rounded-full text-xs ${map[tone]}`}>{children}</span>
-  );
-}
-
-function RecommendationPill({ rec }: { rec: Recommendation | null }) {
-  if (!rec) return <Badge tone="gray">No recommendations</Badge>;
-  const tone =
-    rec.type === "scale"
-      ? "green"
-      : rec.type === "pause"
-      ? "red"
-      : rec.type === "creative"
-      ? "amber"
-      : "blue";
-  return <Badge tone={tone}>{rec.title}</Badge>;
-}
-
-function SkeletonRow() {
-  return (
-    <tr className="border-t animate-pulse">
-      {Array.from({ length: 9 }).map((_, i) => (
-        <td key={i} className="p-3">
-          <div className="h-4 w-full bg-gray-100 rounded" />
-        </td>
-      ))}
-    </tr>
-  );
-}
-
+// ----- main component -----
 
 function DashboardInner() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
+  const sp = useSearchParams();
+  const { pushToast } = useToasts();
 
-
-    const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
-    const [channelFilter, setChannelFilter] = useState<"All" | Channel>(
-    (searchParams.get("channel") as Channel) ?? "All"
-    );
-    const [sortBy, setSortBy] = useState<"spend" | "revenue" | "roas" | "cpa" | "ctr" | null>(
-    (searchParams.get("sort") as ("spend" | "revenue" | "roas" | "cpa" | "ctr")) ?? null
-    );
-    const [sortDir, setSortDir] = useState<"asc" | "desc">(
-    (searchParams.get("dir") as "asc" | "desc") ?? "desc"
-    );
-    const [selected, setSelected] = useState<DerivedCampaign | null>(null);
-    const [audit, setAudit] = useState<AuditEntry[]>([]);
-    const [refreshing, setRefreshing] = useState(false);
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [settings, setSettings] = useState<DemoSettings>(DEFAULT_SETTINGS);
-    useEffect(() => {
-      try {
-        const raw = typeof window !== "undefined" ? localStorage.getItem("adpilot_demo_settings") : null;
-        if (raw) setSettings((s) => ({ ...s, ...JSON.parse(raw) }));
-      } catch {}
-    }, []);
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const [rawCampaigns, setRawCampaigns] = useState<Campaign[]>([]);
-    const [clientId, setClientId] = useState<ClientId>(() => {
-      const v = (searchParams.get("client") as ClientId) ?? "acme";
-      return (["acme","orbit","nova","zen"]).includes(v) ? v : "acme";
-    });
-    const [readOnly] = useState<boolean>(() => (searchParams.get("mode") === "ro"));
-    const [actionJson, setActionJson] = useState<string | null>(null);
-    const [payloadOpen, setPayloadOpen] = useState(false);
-    const [showHotkeys, setShowHotkeys] = useState(false);
-    const searchRef = useRef<HTMLInputElement | null>(null);
-
-    type Toast = { id: string; text: string };
-    const [toasts, setToasts] = useState<Toast[]>([]);
-    const cellBase = `p-3 ${settings.compact ? "py-1.5" : ""}`;
-
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => { setMounted(true); }, []);
-
-    const [importOpen, setImportOpen] = useState(false);
-    const [importClient, setImportClient] = useState<ClientId>(clientId);
-    const [importing, setImporting] = useState(false);
-    const importFileRef = useRef<HTMLInputElement | null>(null);
-    const [onlyActive, setOnlyActive] = useState(true);
-
-
-
-
-    type ThemeMode = "light" | "dark" | "system";
-    const [theme, setTheme] = useState<ThemeMode>("system");
-
-    useEffect(() => {
-      try {
-        const saved = localStorage.getItem("adpilot_theme") as ThemeMode | null;
-        if (saved) setTheme(saved);
-      } catch {}
-    }, []);
-
-    useEffect(() => {
-      if (typeof window === "undefined") return;
-      const root = document.documentElement;
-      const apply = (m: ThemeMode) => {
-        if (m === "system") {
-          const prefersDark = window.matchMedia("(prefers-color-scheme: light)").matches;
-          root.classList.toggle("dark", prefersDark);
-        } else {
-          root.classList.toggle("dark", m === "dark");
-        }
-      };
-      apply(theme);
-
-      localStorage.setItem("adpilot_theme", theme);
-
-      const mq = window.matchMedia("(prefers-color-scheme: light)");
-      const onChange = () => { if (theme === "system") apply("system"); };
-      mq.addEventListener?.("change", onChange);
-      
-      return () => mq.removeEventListener?.("change", onChange);
-    }, [theme]);
-
-    function fmt(d: Date) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    }
-
-    function addDays(d: Date, n: number) {
-      const x = new Date(d);
-      x.setDate(x.getDate() + n);
-      return x;
-    }
-
-    const today = new Date();
-    const defaultFrom = new Date(today);
-    defaultFrom.setDate(today.getDate() - 29);
-
-    const [dateFrom, setDateFrom] = useState<string>(fmt(defaultFrom));
-    const [dateTo, setDateTo] = useState<string>(fmt(today));
-
-    function applyPreset(p: "7d"|"14d"|"30d"|"mtd"|"prev-month") {
-      const now = new Date();
-
-      if (p === "mtd") {
-        const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        setDateFrom(fmt(first));
-        setDateTo(fmt(now));
-        return;
-      }
-
-      if (p === "prev-month") {
-        const firstPrev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-        const lastPrev  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
-        setDateFrom(fmt(firstPrev));
-        setDateTo(fmt(lastPrev));
-        return;
-      }
-
-      const map = { "7d": 6, "14d": 13, "30d": 29 } as const;
-      setDateFrom(fmt(addDays(now, -map[p])));
-      setDateTo(fmt(now));
-    }
-
-
-
-    useEffect(() => {
-      let alive = true;
-      (async () => {
-        setRefreshing(true);
-        setErrorMsg(null);
-        try {
-          const data = await getCampaigns({
-            clientId,
-            channel: channelFilter === "All" ? undefined : channelFilter,
-            q: query || undefined,
-            dateFrom: isValidYmd(dateFrom) ? dateFrom : undefined,
-            dateTo:   isValidYmd(dateTo)   ? dateTo   : undefined,
-            lowRoas: settings.lowRoasThreshold,
-            highRoas: settings.highRoasThreshold,
-            minSpendForPause: settings.minSpendForPause,
-            minConversionsForScale: settings.minConversionsForScale,
-            fatigueFreq: settings.fatigueFreq,
-            lowCtr: settings.lowCtrThreshold,
-          });
-          if (alive) setRawCampaigns(data);
-        } catch (e) {
-          if (alive) setErrorMsg(`Failed to load campaigns (demo API). ${e}`);
-        } finally {
-          if (alive) setRefreshing(false);
-        }
-      })();
-      return () => { alive = false; };
-    }, [ clientId, channelFilter, query, dateFrom, dateTo, settings.lowRoasThreshold, settings.highRoasThreshold, settings.minSpendForPause, settings.minConversionsForScale, settings.fatigueFreq, settings.lowCtrThreshold ]);
-
-    useEffect(() => {
-      try {
-        localStorage.setItem("adpilot_demo_settings", JSON.stringify(settings));
-      } catch {}
-    }, [settings]);
-
-    useEffect(() => {
-      if (selected) setPayloadOpen(false);
-    }, [selected]);
-
-    useEffect(() => {
-      const onKey = (e: KeyboardEvent) => {
-        // Esc — close campaign modal/hint
-        if (e.key === "Escape") {
-          if (selected) setSelected(null);
-          if (settingsOpen) setSettingsOpen(false);
-          if (showHotkeys) setShowHotkeys(false);
-        }
-
-        // "/" — focus search (if not already typing in input)
-        if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-          if (tag !== "input" && tag !== "textarea") {
-            e.preventDefault();
-            searchRef.current?.focus();
-          }
-        }
-
-        // Ctrl/Cmd + K — open settings
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-          e.preventDefault();
-          setSettingsOpen(true);
-        }
-
-        // "?" — show keyboard shortcuts help (Shift + / usually produces "?")
-        if (e.key === "?" || (e.shiftKey && e.key === "/")) {
-          e.preventDefault();
-          setShowHotkeys((v) => !v);
-        }
-      };
-      window.addEventListener("keydown", onKey);
-      return () => window.removeEventListener("keydown", onKey);
-    }, [selected, settingsOpen, showHotkeys]);
-
-
-
-    const urlState = useMemo(() => ({
-      client: clientId || null,
-      q: query || null,
-      channel: channelFilter === "All" ? null : channelFilter,
-      sort: sortBy || null,
-      dir: sortBy ? sortDir : null,
-      mode: readOnly ? "ro" : null,
-      from: isValidYmd(dateFrom) ? dateFrom : null,
-      to:   isValidYmd(dateTo)   ? dateTo   : null,
-    }), [clientId, query, channelFilter, sortBy, sortDir, readOnly, dateFrom, dateTo]);
-
-
-    useEffect(() => {
-      const params = new URLSearchParams();
-      Object.entries(urlState).forEach(([k, v]) => {
-        if (v != null && v !== "") params.set(k, v as string);
-      });
-
-      const qs = params.toString();
-      router.replace(qs ? `?${qs}` : "");
-    }, [urlState, router]);
-
-    useEffect(() => {
-      const sp = new URLSearchParams(window.location.search);
-      const from = sp.get("from");
-      const to = sp.get("to");
-      if (isValidYmd(from || undefined)) setDateFrom(from!);
-      if (isValidYmd(to   || undefined)) setDateTo(to!);
-    }, []);
-
-
-
-    function onChannelClick(ch: "All" | Channel) {
-      if (channelFilter === ch) setChannelFilter("All");
-      else setChannelFilter(ch);
-    }
-
-    function toggleSort(col: "spend" | "revenue" | "roas" | "cpa" | "ctr") {
-        if (sortBy === col) {
-            if (sortDir === "asc") {
-            // third click
-            setSortBy(null);
-            setSortDir("desc");
-            } else {
-            // second click
-            setSortDir("asc");
-            }
-        } else {
-            // first click
-            setSortBy(col);
-            setSortDir("desc");
-        }
-    }
-
-    function pushToast(text: string, ms = 3500) {
-      const id = Math.random().toString(36).slice(2);
-      setToasts((t) => [{ id, text }, ...t]);
-      setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
-    }
-
-  const data = useMemo<DerivedCampaign[]>(
-    () => rawCampaigns.map((c) => computeDerived(c, settings)),
-    [rawCampaigns, settings]
+  const [clientId, setClientId] = useState<ClientId>(() => toClientId(sp.get("client")));
+  const [readOnly] = useState<boolean>(() => sp.get("mode") === "ro");
+  const [query, setQuery] = useState(() => sp.get("q") ?? "");
+  const [channelFilter, setChannelFilter] = useState<"All" | Channel>(
+    (sp.get("channel") as Channel) ?? "All"
   );
+  const [sortBy, setSortBy] = useState<SortKey | null>(() => toSortKey(sp.get("sort")) ?? "revenue");
+  const [sortDir, setSortDir] = useState<"asc"|"desc">(() => toDir(sp.get("dir")));
 
-  const filtered = useMemo(
-    () => data.filter(c => (channelFilter === "All" || c.channel === channelFilter) &&
-                          (!query || c.name.toLowerCase().includes(query.toLowerCase()))),
-    [ data, channelFilter, query ]
-  );
+  function handleSort(col: typeof sortBy) {
+    if (!col) return;
+    if (sortBy === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(col); setSortDir("desc"); }
+  }
 
-  const sorted = useMemo<DerivedCampaign[]>(() => {
-    const arr = [...filtered];
-    if (!sortBy) return arr;
-    arr.sort((a, b) => {
-      const av =
-        sortBy === "roas" ? a.roas :
-        sortBy === "cpa" ? (a.cpa ?? Number.POSITIVE_INFINITY) :
-        sortBy === "ctr" ? a.ctr :
-        sortBy === "spend" ? a.spend : a.revenue;
-      const bv =
-        sortBy === "roas" ? b.roas :
-        sortBy === "cpa" ? (b.cpa ?? Number.POSITIVE_INFINITY) :
-        sortBy === "ctr" ? b.ctr :
-        sortBy === "spend" ? b.spend : b.revenue;
-      if (av === bv) return 0;
-      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-    });
-    return arr;
-  }, [filtered, sortBy, sortDir]);
+  // demo settings (persisted)
+  const [settings, setSettings] = useState<DemoSettings>(DEFAULT_SETTINGS);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("adpilot_demo_settings");
+      if (raw) setSettings((s) => ({ ...s, ...JSON.parse(raw) }));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("adpilot_demo_settings", JSON.stringify(settings));
+    } catch {}
+  }, [settings]);
+
+  // features: theme / import dialog / settings modal / hotkeys
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [showHotkeys, setShowHotkeys] = useState(false);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag !== "input" && tag !== "textarea") { e.preventDefault(); searchRef.current?.focus(); }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSettingsOpen(true); }
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); setShowHotkeys((v) => !v); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // server fetch hook (adds dates inside)
+  const baseFilters = {
+    clientId,
+    channel: channelFilter === "All" ? undefined : channelFilter,
+    q: query || undefined,
+    lowRoas: settings.lowRoasThreshold,
+    highRoas: settings.highRoasThreshold,
+    minSpendForPause: settings.minSpendForPause,
+    minConversionsForScale: settings.minConversionsForScale,
+    fatigueFreq: settings.fatigueFreq,
+    lowCtr: settings.lowCtrThreshold,
+  } as const;
+
+  const {
+    rows: campaigns,
+    loading: refreshing,
+    error: loadError,
+    dateFrom, dateTo, setDateFrom, setDateTo,
+    refresh: onRefresh,
+  } = useCampaigns(baseFilters);
+
+  // keep URL in sync
+  useUrlSync({
+    client: clientId,
+    q: query || undefined,
+    channel: channelFilter === "All" ? undefined : channelFilter,
+    sort: sortBy || undefined,
+    dir: sortBy ? sortDir : undefined,
+    mode: readOnly ? "ro" : undefined,
+    from: dateFrom || undefined,
+    to: dateTo || undefined,
+  });
+
+  // table sorting (client-side) -> CampaignTable expects already sorted rows
+  const tableRows: CampaignRow[] = useMemo(() => {
+  const arr = [...campaigns];
+  const key = sortBy;
+  if (!key) return arr;
+
+  const cmpNum = (a: number, b: number) => (sortDir === "asc" ? a - b : b - a);
+  const cmpStr = (a: string, b: string) =>
+    sortDir === "asc" ? a.localeCompare(b) : b.localeCompare(a);
+
+  arr.sort((a, b) => {
+    switch (key) {
+      case "roas": {
+        const av = a.spend > 0 ? a.revenue / a.spend : 0;
+        const bv = b.spend > 0 ? b.revenue / b.spend : 0;
+        return cmpNum(av, bv);
+      }
+      case "cpa": {
+        const av = a.conversions > 0 ? a.spend / a.conversions : Number.POSITIVE_INFINITY;
+        const bv = b.conversions > 0 ? b.spend / b.conversions : Number.POSITIVE_INFINITY;
+        return cmpNum(av, bv);
+      }
+      case "ctr": return cmpNum(a.ctr, b.ctr);
+      case "frequency": return cmpNum(a.frequency, b.frequency);
+      case "spend": return cmpNum(a.spend, b.spend);
+      case "revenue": return cmpNum(a.revenue, b.revenue);
+      case "channel": return cmpStr(a.channel, b.channel);
+      case "name": return cmpStr(a.name, b.name);
+      case "recommendation": {
+        const order = (t?: CampaignRow["recommendation"]) =>
+          !t ? 9 : t.type === "pause" ? 0 : t.type === "scale" ? 1 : t.type === "creative" ? 2 : 8;
+        return cmpNum(order(a.recommendation), order(b.recommendation));
+      }
+      default: return 0;
+    }
+  });
+
+  return arr;
+}, [campaigns, sortBy, sortDir]);
 
 
+  // totals (simple KPI)
   const totals = useMemo(() => {
-    const base = { spend: 0, revenue: 0, conversions: 0, clicks: 0 };
-    const agg = filtered.reduce((acc, c) => {
-      acc.spend += c.spend;
-      acc.revenue += c.revenue;
-      acc.conversions += c.conversions;
-      acc.clicks += c.clicks;
+    const base = { spend: 0, revenue: 0, conversions: 0, clicks: 0, ctrSum: 0 };
+    const agg = campaigns.reduce((acc, c) => {
+      acc.spend += c.spend; acc.revenue += c.revenue; acc.conversions += c.conversions; acc.clicks += c.clicks; acc.ctrSum += c.ctr;
       return acc;
     }, base);
     return {
@@ -544,114 +223,77 @@ function DashboardInner() {
       revenue: `€${agg.revenue.toFixed(2)}`,
       roas: agg.spend ? (agg.revenue / agg.spend).toFixed(2) : "0.00",
       cpa: agg.conversions ? `€${(agg.spend / agg.conversions).toFixed(2)}` : "—",
-      ctr: agg.clicks && filtered.length
-        ? `${(
-            (filtered.reduce((a, c) => a + c.ctr, 0) / filtered.length) * 100
-          ).toFixed(2)}%`
-        : "—",
+      ctr: campaigns.length ? `${((agg.ctrSum / campaigns.length) * 100).toFixed(2)}%` : "—",
     };
-  }, [filtered]);
+  }, [campaigns]);
 
-  function buildReadonlyLink(): string {
-    const params = new URLSearchParams();
-    if (clientId) params.set("client", clientId);
-    if (query) params.set("q", query);
-    if (channelFilter !== "All") params.set("channel", channelFilter);
-    if (sortBy) {
-      params.set("sort", sortBy);
-      params.set("dir", sortDir);
-    }
-    params.set("from", dateFrom);
-    params.set("to", dateTo);
+  // campaign modal
+  const [selected, setSelected] = useState<CampaignModalData | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [audit, setAudit] = useState<ActionEntry[]>([]);
 
-    params.set("mode", "ro");
-    const qs = params.toString();
-    return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
+  function openCampaign(row: CampaignRow) {
+    const data: CampaignModalData = {
+      id: row.id,
+      channel: row.channel,
+      name: row.name,
+      status: row.status,
+      impressions: row.impressions,
+      clicks: row.clicks,
+      spend: row.spend,
+      conversions: row.conversions,
+      revenue: row.revenue,
+      frequency: row.frequency,
+      ctr: row.ctr,
+      recommendation: row.recommendation,
+      raw: row,
+    };
+    setSelected(data);
+    setModalOpen(true);
+  }
+  function handleAction(a: CampaignAction) {
+    if (a.type === "pause") pushToast("Paused (demo)");
+    else if (a.type === "scale") pushToast(`Scaled by +${Math.round(a.by * 100)}% (demo)`);
+    else if (a.type === "rotate_creatives") pushToast("Rotate creatives (demo)");
   }
 
-  const alerts = useMemo(() => {
-    const actionable = filtered.filter(
-      (c) => c.recommendation && c.recommendation.type !== "hold"
-    );
-    const weight = (t: RecType) =>
-      t === "pause" ? 0 : t === "scale" ? 1 : t === "creative" ? 2 : 3;
-    actionable.sort((a, b) => {
-      const ta = a.recommendation!.type, tb = b.recommendation!.type;
-      if (ta !== tb) return weight(ta) - weight(tb);
-      return b.spend - a.spend;
-    });
-    return actionable.slice(0, 5);
-  }, [filtered]);
-
-
-  function onGenerateAction(c: DerivedCampaign) {
-    const rec = c.recommendation;
-    const entry: AuditEntry = {
+  function onGenerateAction(row: CampaignRow) {
+    const recType = row.recommendation?.type ?? "none";
+    const entry: ActionEntry = {
       ts: new Date().toISOString(),
-      campaign: c.name,
-      channel: c.channel,
-      action: rec?.action ? (rec.action as Exclude<RecAction, null>).kind : "none",
-      title: rec?.title || "no-op",
+      campaign: row.name,
+      channel: row.channel,
+      action: recType,
+      title: row.recommendation?.title ?? "no-op",
     };
     setAudit((prev) => [entry, ...prev]);
 
-    const payload = buildActionPayload(c, clientId);
-    setActionJson(payload ? JSON.stringify(payload, null, 2) : null);
-
-    setSelected(c);
+    // при желании можно сразу открыть модалку:
+    setSelected({
+      id: row.id,
+      channel: row.channel,
+      name: row.name,
+      status: row.status,
+      impressions: row.impressions,
+      clicks: row.clicks,
+      spend: row.spend,
+      conversions: row.conversions,
+      revenue: row.revenue,
+      frequency: row.frequency,
+      ctr: row.ctr,
+      recommendation: row.recommendation,
+      raw: row,
+    });
+    setModalOpen(true);
   }
 
-  function isValidYmd(s?: string) {
-    if (!s) return false;
-    // ожидаем YYYY-MM-DD
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-    const t = Date.parse(s + "T00:00:00Z");
-    return !Number.isNaN(t);
-  }
+  // alerts: берём из уже отфильтрованных кампаний
+  const alertsRows = useMemo(
+    () => campaigns.map(c => ({ id: c.id, name: c.name, channel: c.channel, spend: c.spend, recommendation: c.recommendation })),
+    [campaigns]
+  );
 
-  async function onRefresh() {
-    setRefreshing(true);
-    setErrorMsg(null);
-    try {
-      const data = await getCampaigns({
-        clientId,
-        channel: channelFilter === "All" ? undefined : channelFilter,
-        q: query || undefined,
-        dateFrom: isValidYmd(dateFrom) ? dateFrom : undefined,
-        dateTo: isValidYmd(dateTo) ? dateTo : undefined,
-        lowRoas: settings.lowRoasThreshold,
-        highRoas: settings.highRoasThreshold,
-        minSpendForPause: settings.minSpendForPause,
-        minConversionsForScale: settings.minConversionsForScale,
-        fatigueFreq: settings.fatigueFreq,
-        lowCtr: settings.lowCtrThreshold,
-      });
-      setRawCampaigns(data);
-      pushToast("Data updated");
-    } catch {
-      setErrorMsg("Failed to update yesterday&apos;s data: API quota exceeded. Please try again later.");
-      pushToast("Data update error");
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  function toCsv(rows: DerivedCampaign[]) {
-    const headers = ["Channel","Campaign","Status","Spend","Revenue","ROAS","CPA","CTR"];
-    const lines = rows.map((c) => [
-      c.channel, c.name, c.status,
-      c.spend.toFixed(2), c.revenue.toFixed(2),
-      c.roas.toFixed(2), c.cpa ? c.cpa.toFixed(2) : "",
-      (c.ctr * 100).toFixed(2) + "%"
-    ]);
-    const csv = [headers, ...lines]
-      .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))
-      .join("\n");
-    return csv;
-  }
-
-
-    function download(filename: string, text: string) {
+  function download(filename: string, text: string) {
     const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -663,777 +305,152 @@ function DashboardInner() {
     URL.revokeObjectURL(url);
     }
 
+    function toCsv(rows: CampaignRow[]) {
+    const headers = ["Channel","Campaign","Status","Spend","Revenue","ROAS","CPA","CTR"];
+    const lines = rows.map((c) => [
+      c.channel, c.name, c.status,
+      c.spend.toFixed(2), c.revenue.toFixed(2),
+      c.roasTrend, c.cpaTrend ? c.cpaTrend : "",
+      (c.ctr * 100).toFixed(2) + "%"
+    ]);
+    const csv = [headers, ...lines]
+      .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))
+      .join("\n");
+    return csv;
+  }
+
     function onExportCsv() {
-      const csv = toCsv(sorted);
+      const csv = toCsv(tableRows);
       download(`adpilot_campaigns_${new Date().toISOString().slice(0,10)}.csv`, csv);
       pushToast("CSV exported");
     }
 
+    function buildReadonlyLink(): string {
+    const params = new URLSearchParams();
+    if (clientId) params.set("client", clientId);
+    if (query) params.set("q", query);
+    if (channelFilter !== "All") params.set("channel", channelFilter);
+    if (sortBy) {
+      params.set("sort", sortBy);
+      params.set("dir", sortDir);
+    }
+    // params.set("from", dateFrom);
+    // params.set("to", dateTo);
+
+    params.set("mode", "ro");
+    const qs = params.toString();
+    return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
+  }
+
+  function shareReadOnlyLink() {
+    const link = buildReadonlyLink();
+    navigator.clipboard.writeText(link).then(() => pushToast("Read-only link copied")).catch(() => {});
+  }
+
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-800">
-    {/* <div className="min-h-screen bg-gray-50"> */}
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-2xl bg-black text-white grid place-items-center font-bold">A</div>
-            <div className="font-semibold">AdPilot</div>
-            <Badge tone="blue">Mock / without API</Badge>
-            {readOnly && <Badge tone="amber">Read-only</Badge>}
-          </div>
-          <div className="flex items-center gap-2">
-            {!readOnly && (
-              <>
-              <button className="px-3 py-1.5 rounded-xl bg-gray-900 dark:bg-white dark:text-gray-900 text-white text-sm" onClick={onRefresh}>
-                {refreshing ? "Updating…" : "Refresh data"}
-              </button>
-              <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={onExportCsv}>
-                  Export CSV
-              </button>
-              <button className="px-3 py-1.5 rounded-xl border text-sm" onClick={() => { setImportClient(clientId); setImportOpen(true); }}>
-                Import CSV
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-xl border text-sm"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open demo settings"
-              >
-                ⚙️
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-xl border text-sm"
-                onClick={() => {
-                  const link = buildReadonlyLink();
-                  navigator.clipboard.writeText(link).then(() => pushToast("Read-only link copied")).catch(() => {});
-                }}
-                title="Copy read-only link"
-              >
-                Share (read-only)
-              </button>
-              </>
-            )}
-            <select
-              className="px-3 py-1.5 rounded-xl border text-sm"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value as ClientId)}
-              aria-label="Select client"
-            >
-              {CLIENTS.map(c => (
-                <option className="dark:bg-gray-900 dark:text-white" key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {errorMsg && (
-            <div className="bg-red-50 border-t border-red-200">
-                <div className="max-w-6xl mx-auto px-4 py-2 text-sm text-red-700 flex items-center justify-between">
-                <span>{errorMsg}</span>
-                <button className="underline" onClick={() => setErrorMsg(null)}>Hide</button>
-                </div>
-            </div>
-        )}
-      </header>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+      {/* Header */}
+      <DashboardHeader 
+        readOnly={readOnly} 
+        onRefresh={onRefresh} 
+        refreshing={refreshing}
+        setSettingsOpen={setSettingsOpen}
+        setImportOpen={setImportOpen}
+        loadError={loadError}
+        clientId={clientId}
+        clientsList={CLIENTS}
+        setClientId={(id) => setClientId(id)}
+        onExportCsv={onExportCsv}
+        shareReadOnlyLink={shareReadOnlyLink}
+      />
 
       {/* Content */}
       <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6 text-gray-900 dark:text-gray-100">
         {/* Connections */}
-        <section className="grid md:grid-cols-3 gap-3">
-          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div>
-              <div className="font-medium">Google Ads</div>
-              <div className="text-xs text-gray-500">Status: connected (mock)</div>
-            </div>
-            <button className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-sm">Manage</button>
-          </div>
-          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div>
-              <div className="font-medium">Meta Ads</div>
-              <div className="text-xs text-gray-500">Status: connected (mock)</div>
-            </div>
-            <button className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-sm">Manage</button>
-          </div>
-          <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div>
-              <div className="font-medium">GA4</div>
-              <div className="text-xs text-gray-500">Status: connected (mock)</div>
-            </div>
-            <button className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-sm">Manage</button>
-          </div>
-        </section>
+        <Connections />
 
         {/* KPIs */}
         <section className="grid sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Spend (30d)" value={totals.spend} />
-          <KpiCard label="Revenue (30d)" value={totals.revenue} />
+          <KpiCard label="Spend (period)" value={totals.spend} />
+          <KpiCard label="Revenue (period)" value={totals.revenue} />
           <KpiCard label="ROAS" value={totals.roas} />
           <KpiCard label="CPA" value={totals.cpa} />
         </section>
 
         {/* Filters */}
-        <section className="rounded-2xl bg-white dark:bg-gray-800 p-4 border flex flex-col md:flex-row md:items-center gap-3 justify-between border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            {(["All", "Google Ads", "Meta Ads"] as const).map((ch) => (
-              <button
-                key={ch}
-                onClick={() => onChannelClick(ch)}
-                className={`px-3 py-1.5 rounded-full text-sm border ${
-                  channelFilter === ch ? "bg-gray-900 text-white dark:bg-white dark:border-gray-900 dark:text-gray-900" : "bg-white dark:bg-gray-900"
-                }`}
-              >
-                {ch}
-              </button>
-            ))}
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={onlyActive} onChange={(e)=>setOnlyActive(e.target.checked)} />
-              Only active
-            </label>
-
-          </div>
-            
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-500">Period:</label>
-
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-app bg-app text-sm"
-              />
-              <span className="text-gray-400">—</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-app bg-app text-sm"
-              />
-            </div>
-            <div className="flex items-center self-center pt-1 gap-1">
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("7d")}>7d</span>
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("14d")}>14d</span>
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("30d")}>30d</span>
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("mtd")}>MTD</span>
-              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 cursor-pointer" onClick={() => applyPreset("prev-month")}>Prev M</span>
-            </div>
-          </div>
-
-          <div className="grid col">
-            <div className="flex items-center align-top gap-2">
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Searching for campaigns…"
-                className="px-3 py-2 rounded-xl border w-64"
-              />
-
-              <button
-                className="px-3 py-2 rounded-xl border text-sm"
-                onClick={() => {
-                  setQuery("");
-                  setChannelFilter("All");
-                  setSortBy(null);
-                  setSortDir("desc");
-                }}
-                title="Reset filters and sort"
-              >
-                Reset
-              </button>
-            </div>
-            <div className="text-xs text-gray-400">Press «/» to search</div>
-          </div>
-        </section>
+        <FiltersBar
+          channel={channelFilter}
+          onChannelChange={(ch) => setChannelFilter(ch)}
+          query={query}
+          onQueryChange={setQuery}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFrom={setDateFrom}
+          onDateTo={setDateTo}
+          onRefresh={onRefresh}
+          readOnly={readOnly}
+          refreshing={refreshing}
+          setImportOpen={setImportOpen}
+          onExportCsv={onExportCsv}
+          resetSort={handleSort}
+          searchRef={searchRef}
+        />
 
         {/* Alerts */}
-        {alerts.length > 0 && (
-          <section className="rounded-2xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
-            <div className="text-sm font-medium mb-2">Period Alerts</div>
-            <ul className="text-sm space-y-2">
-              {alerts.map((c) => (
-                <li key={c.id} className="flex items-start gap-2">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs
-                    ${c.recommendation!.type === "pause"
-                        ? "bg-red-100 text-red-700"
-                        : c.recommendation!.type === "scale"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {c.recommendation!.title}
-                  </span>
-
-                  <button
-                    className="text-left text-gray-700 dark:text-gray-200 hover:underline"
-                    onClick={() => setSelected(c)}
-                    title="Open campaign details"
-                  >
-                    <span className="text-gray-500">{c.channel}</span> — <strong>{c.name}</strong>
-                    {c.recommendation?.reason ? <> · {c.recommendation!.reason}</> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
+        <Alerts
+          rows={alertsRows}
+          onOpen={(id) => {
+            const r = campaigns.find(x => x.id === id);
+            if (r) openCampaign(r);
+          }}
+        />
 
         {/* Table */}
-        <section className="rounded-2xl overflow-hidden border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-          <div className="max-h-[60vh] overflow-auto">
-            {!mounted ? (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="text-left p-3">Channel</th>
-                    <th className="text-left p-3">Campaign</th>
-                    <th className="text-right p-3">Spend</th>
-                    <th className="text-right p-3">Revenue</th>
-                    <th className="text-right p-3">ROAS</th>
-                    <th className="text-right p-3">CPA</th>
-                    <th className="text-right p-3">CTR</th>
-                    <th className="text-left p-3">Recommendation</th>
-                    <th className="text-right p-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-t">
-                    <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
-                      Loading…
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className={`text-left ${cellBase}`}>Channel</th>
-                    <th className={`text-left ${cellBase}`}>Campaign</th>
-                    {settings.columns?.spend && (
-                      <th className={`text-right ${cellBase}`}>
-                          <button onClick={() => toggleSort("spend")} className="hover:underline">
-                              Spend {sortBy === "spend" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                          </button>
-                      </th>
-                    )}
-                    {settings.columns?.revenue && (
-                      <th className={`text-right ${cellBase}`}>
-                          <button onClick={() => toggleSort("revenue")} className="hover:underline">
-                              Revenue {sortBy === "revenue" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                          </button>
-                      </th>
-                    )}
-                    {settings.columns?.roas && (
-                      <th className={`text-right ${cellBase}`}>
-                          <button onClick={() => toggleSort("roas")} className="hover:underline">
-                              ROAS {sortBy === "roas" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                          </button>
-                      </th>
-                    )}
-                    {settings.columns?.cpa && (
-                      <th className={`text-right ${cellBase}`}>
-                          <button onClick={() => toggleSort("cpa")} className="hover:underline">
-                              CPA {sortBy === "cpa" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                          </button>
-                      </th>
-                    )}
-                    {settings.columns?.ctr && (
-                      <th className={`text-right ${cellBase}`}>
-                          <button onClick={() => toggleSort("ctr")} className="hover:underline">
-                              CTR {sortBy === "ctr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                          </button>
-                    </th>
-                    )}
-                    {settings.columns?.recommendation && (
-                      <th className={`text-left ${cellBase}`}>Recommendation</th>
-                    )}
-                    {settings.columns?.actions && (
-                      <th className={`text-right ${cellBase}`}>Actions</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                    {refreshing ? (
-                        <>
-                        <SkeletonRow />
-                        <SkeletonRow />
-                        <SkeletonRow />
-                        <SkeletonRow />
-                        <SkeletonRow />
-                        </>
-                    ) : sorted.length === 0 ? (
-                        <tr>
-                        <td colSpan={9} className="p-6 text-center text-sm text-gray-500">
-                            No results found for current filters. Reset filters or modify your search.
-                        </td>
-                        </tr>
-                    ) : (
-                        sorted.map((c) => (
-                        <tr key={c.id} className="border-t">
-                            <td className={`${cellBase} whitespace-nowrap`}>{c.channel}</td>
-                            <td className={cellBase}>
-                            <div className="font-medium">{c.name}</div>
-                            <div className="text-xs text-gray-500">{c.status}</div>
-                            </td>
-                            {settings.columns?.spend && <td className={`${cellBase} text-right`}>${c.spend.toFixed(2)}</td>}
-                            {settings.columns?.revenue && <td className={`${cellBase} text-right`}>${c.revenue.toFixed(2)}</td>}
-                            {settings.columns?.roas && <td className={`${cellBase} text-right`}>{c.roas.toFixed(2)}</td>}
-                            {settings.columns?.cpa && <td className={`${cellBase} text-right`}>{c.cpa ? `$${c.cpa.toFixed(2)}` : "—"}</td>}
-                            {settings.columns?.ctr && <td className={`${cellBase} text-right`}>{(c.ctr * 100).toFixed(2)}%</td>}
-                            {settings.columns?.recommendation && <td className={cellBase}><RecommendationPill rec={c.recommendation} /></td>}
-                            {settings.columns?.actions && (
-                              <td className={`${cellBase} text-right`}>
-                              <div className="flex justify-end gap-2">
-                                  <button onClick={() => { 
-                                        setSelected(c); setActionJson(buildActionPayload(c, clientId) ? JSON.stringify(buildActionPayload(c, clientId), null, 2) : null); 
-                                      }}
-                                      className="px-3 py-1.5 rounded-xl border"
-                                  >
-                                  More
-                                  </button>
-                                  {!readOnly && (
-                                    <button onClick={() => onGenerateAction(c)} className="px-3 py-1.5 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900">
-                                    Generate action
-                                    </button>
-                                  )}
-                              </div>
-                              </td>
-                            )}
-                        </tr>
-                        ))
-                    )}
-                    </tbody>
-              </table>
-              )}
-          </div>
-        </section>
+        <CampaignTable
+          rows={tableRows}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSort={handleSort}
+          onOpenCampaign={openCampaign}
+          loading={refreshing}
+          onGenerateAction={onGenerateAction}
+        />
 
-        {/* Audit log */}
-        {!readOnly && (
-        <section className="rounded-2xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-medium">Activity Journal (local, mock)</div>
-            <button
-              className="text-sm text-gray-500 underline"
-              onClick={() => setAudit([])}
-            >
-              Clear
-            </button>
-          </div>
-          {audit.length === 0 ? (
-            <div className="text-sm text-gray-500">No actions yet. Use &apos;Generate Action&apos; for a campaign.</div>
-          ) : (
-            <ul className="space-y-2">
-              {audit.map((a, idx) => (
-                <li key={idx} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge tone="blue">{a.action}</Badge>
-                    <span className="font-medium">{a.campaign}</span>
-                    <span className="text-gray-500">({a.channel})</span>
-                  </div>
-                  <div className="text-gray-400">{new Date(a.ts).toLocaleString()}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        )}
+        <ActionsLog
+          entries={audit}
+          onClear={() => setAudit([])}
+        />
       </main>
 
-      {/* Modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 bg-black/40 p-4 grid place-items-center overflow-y-auto"
-          onClick={() => setSelected(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="bg-white dark:bg-gray-800 mt-10 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-5 py-4 border-b flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm text-gray-500">{selected.channel}</div>
-                <div className="text-xl font-semibold">{selected.name}</div>
-              </div>
-              <button className="text-gray-400" onClick={() => setSelected(null)} aria-label="Close">✕</button>
-            </div>
+      {/* Campaign modal */}
+      <CampaignModal open={modalOpen} data={selected} onClose={() => setModalOpen(false)} onAction={handleAction} />
 
-            {/* Scrollable content */}
-            <div className="px-5 py-4 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-gray-500">Spend</div>
-                  <div className="font-medium">€{selected.spend.toFixed(2)}</div>
-                </div>
-                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-gray-500">Revenue</div>
-                  <div className="font-medium">€{selected.revenue.toFixed(2)}</div>
-                </div>
-                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-gray-500">ROAS</div>
-                  <div className="font-medium">{selected.roas.toFixed(2)}</div>
-                </div>
-                <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-gray-500">CPA</div>
-                  <div className="font-medium">{selected.cpa ? `€${selected.cpa.toFixed(2)}` : "—"}</div>
-                </div>
-              </div>
+      {/* Import */}
+      <ImportCsvDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        clients={CLIENTS}
+        initialClientId={clientId}
+        onImported={async () => { await onRefresh(); }}
+        pushToast={pushToast}
+      />
 
-              <div className="text-sm">
-                <div className="text-gray-500 mb-1">Notes</div>
-                <ul className="list-disc ml-5 space-y-1">
-                  {selected.notes?.map((n, i) => <li key={i}>{n}</li>)}
-                </ul>
-              </div>
-
-              <div className="text-sm">
-                <div className="text-gray-500 mb-1">Recommendation</div>
-                {selected.recommendation ? (
-                  <div className="space-y-1">
-                    <RecommendationPill rec={selected.recommendation} />
-                    <div>{selected.recommendation.reason}</div>
-                    {selected.recommendation.risk && (
-                      <div className="text-amber-700 text-xs">Potential risk: {selected.recommendation.risk}</div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-gray-500">No current recommendations</div>
-                )}
-              </div>
-
-              {/* Collapsible Payload */}
-              <div className="text-sm border rounded-xl">
-                <button
-                  className="w-full px-3 py-2 flex items-center justify-between"
-                  onClick={() => setPayloadOpen((v) => !v)}
-                  aria-expanded={payloadOpen}
-                >
-                  <span className="text-gray-600">Payload (draft)</span>
-                  <span className="text-gray-500">{payloadOpen ? "▴" : "▾"}</span>
-                </button>
-
-                {payloadOpen && (
-                  <div className="px-3 pb-3">
-                    {actionJson ? (
-                      <div className="rounded-lg border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 p-2">
-                        <pre className="text-xs overflow-auto max-h-64 leading-5">{actionJson}</pre>
-                        <div className="mt-2 flex items-center justify-end gap-2">
-                          <button
-                            className="px-3 py-1.5 rounded-xl border text-xs"
-                            onClick={() => navigator.clipboard.writeText(actionJson).then(() => pushToast("JSON copied")).catch(() => {})}
-                          >
-                            Copy JSON
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-gray-500 px-1 pb-2">No changes to generate.</div>
-                    )}
-                    <div className="text-xs text-amber-700 mt-1">
-                      This is a demo draft. In real mode, it will be sent to the backend as a dry-run before applying..
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer (fixed in modal) */}
-            <div className="px-5 py-3 border-t flex items-center justify-end gap-2">
-              <button className="px-3 py-2 rounded-xl border" onClick={() => setSelected(null)}>
-                Close
-              </button>
-              {!readOnly && (
-                <button
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-                  onClick={() => setSelected(null)}
-                >
-                  Apply recommendation
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Settings (demo) */}
       {settingsOpen && (
-        <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-xl w-full p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="text-xl font-semibold">Demo settings</div>
-              <button className="text-gray-400" onClick={() => setSettingsOpen(false)}>✕</button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">Min. spend for «pause», $</span>
-                <input
-                  type="number"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.minSpendForPause}
-                  onChange={(e) => setSettings(s => ({ ...s, minSpendForPause: Number(e.target.value) }))}
-                  min={0}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">Low ROAS Threshold</span>
-                <input
-                  type="number" step="0.1"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.lowRoasThreshold}
-                  onChange={(e) => setSettings(s => ({ ...s, lowRoasThreshold: Number(e.target.value) }))}
-                  min={0}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">High ROAS Threshold</span>
-                <input
-                  type="number" step="0.1"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.highRoasThreshold}
-                  onChange={(e) => setSettings(s => ({ ...s, highRoasThreshold: Number(e.target.value) }))}
-                  min={0}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">Min. conversions for «scale»</span>
-                <input
-                  type="number"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.minConversionsForScale}
-                  onChange={(e) => setSettings(s => ({ ...s, minConversionsForScale: Number(e.target.value) }))}
-                  min={0}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">Fatigue Frequency (Meta)</span>
-                <input
-                  type="number" step="0.1"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.fatigueFreq}
-                  onChange={(e) => setSettings(s => ({ ...s, fatigueFreq: Number(e.target.value) }))}
-                  min={0}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-gray-600">Low CTR Threshold (ratio)</span>
-                <input
-                  type="number" step="0.001"
-                  className="px-3 py-2 rounded-xl border"
-                  value={settings.lowCtrThreshold}
-                  onChange={(e) => setSettings(s => ({ ...s, lowCtrThreshold: Number(e.target.value) }))}
-                  min={0} max={1}
-                />
-              </label>
-            </div>
-
-            {/* Columns */}
-            <div className="mt-4">
-              <div className="text-sm text-gray-600 mb-2">Table columns</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                {[
-                  ["spend", "Spend"],
-                  ["revenue", "Revenue"],
-                  ["roas", "ROAS"],
-                  ["cpa", "CPA"],
-                  ["ctr", "CTR"],
-                  ["recommendation", "Recommendation"],
-                  ["actions", "Actions"],
-                ].map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={!!settings.columns?.[key as keyof NonNullable<typeof settings.columns>]}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          columns: {
-                            ...(s.columns ?? DEFAULT_SETTINGS.columns!),
-                            [key]: e.target.checked,
-                          },
-                        }))
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Compact */}
-            <div className="mt-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="rounded"
-                  checked={!!settings.compact}
-                  onChange={(e) => setSettings((s) => ({ ...s, compact: e.target.checked }))}
-                />
-                Compact mode (reduce row height)
-              </label>
-            </div>
-
-            <div className="mt-4">
-              <select
-                className="px-3 py-1.5 rounded-xl border text-sm"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as ThemeMode)}
-                aria-label="Switch theme"
-                title="Switch theme"
-              >
-                <option className="dark:bg-gray-900 dark:text-white" value="light">Theme: Light</option>
-                <option className="dark:bg-gray-900 dark:text-white" value="dark">Theme: Dark</option>
-                <option className="dark:bg-gray-900 dark:text-white" value="system">Theme: System</option>
-              </select>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between">
-              <button
-                className="text-sm text-gray-500 underline"
-                onClick={() => setSettings(DEFAULT_SETTINGS)}
-              >
-                Reset to default values
-              </button>
-              <div className="flex items-center gap-2">
-                <button className="px-3 py-2 rounded-xl border" onClick={() => setSettingsOpen(false)}>Close</button>
-                <button
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white dark:bg-white dark:text-gray-900"
-                  onClick={() => setSettingsOpen(false)}
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {showHotkeys && (
-        <div
-          className="fixed inset-0 bg-black/40 p-4 grid place-items-center"
-          onClick={() => setShowHotkeys(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <div className="text-lg font-semibold">Hot keys</div>
-              <button className="text-gray-400" onClick={() => setShowHotkeys(false)} aria-label="Close">✕</button>
-            </div>
-            <div className="px-5 py-4 text-sm">
-              <ul className="space-y-2">
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">/</kbd> — focus search</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">Esc</kbd> — close modal/hint</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">Ctrl</kbd>/<kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">⌘</kbd> + <kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">K</kbd> — open settings</li>
-                <li><kbd className="px-2 py-1 rounded border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">?</kbd> — show keyboard shortcuts help</li>
-              </ul>
-            </div>
-            <div className="px-5 py-3 border-t text-right">
-              <button className="px-3 py-2 rounded-xl border" onClick={() => setShowHotkeys(false)}>Ok</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Toasts */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {toasts.map((t) => (
-          <div key={t.id} className="rounded-xl bg-indigo-500 text-white text-sm px-3 py-2 shadow-lg border border-indigo-600">
-            {t.text}
-          </div>
-        ))}
-      </div>
-      {importOpen && (
-      <div className="fixed inset-0 bg-black/40 grid place-items-center p-4" onClick={() => setImportOpen(false)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full p-5" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="text-xl font-semibold">Import CSV (beta)</div>
-            <button className="text-gray-400" onClick={() => setImportOpen(false)}>✕</button>
-          </div>
-
-          <div className="mt-4 space-y-3 text-sm">
-            <label className="flex flex-col gap-1">
-              <span className="text-gray-600 dark:text-gray-300">Client</span>
-              <select
-                className="px-3 py-2 rounded-xl border border-app bg-app"
-                value={importClient}
-                onChange={(e) => setImportClient(e.target.value as ClientId)}
-              >
-                {CLIENTS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-gray-600 dark:text-gray-300">file CSV</span>
-              <input ref={importFileRef} type="file" accept=".csv,text/csv" className="px-3 py-2 rounded-xl border border-app bg-app" />
-              <div className="text-xs text-gray-500">
-                Minimal columns: date, campaign, channel, impressions, clicks, spend, conversions, revenue. Separator , or ; .
-              </div>
-            </label>
-          </div>
-
-          <div className="mt-5 flex items-center justify-between">
-            <button className="text-sm text-gray-500 underline" onClick={() => {
-              // CSV example
-              const sample = `date,campaign,channel,impressions,clicks,spend,conversions,revenue,frequency,ctr
-    2025-09-01,Brand Search PL,Google Ads,4000,120,120.00,10,950,1.2,0.03
-    2025-09-01,Retargeting 30d,Meta Ads,6000,240,80.00,12,720,1.8,0.04`;
-              navigator.clipboard.writeText(sample);
-              pushToast("CSV example copied");
-            }}>Copy CSV example</button>
-
-            <div className="flex items-center gap-2">
-              <button className="px-3 py-2 rounded-xl border" onClick={() => setImportOpen(false)}>Cancel</button>
-              <button
-                className="px-3 py-2 rounded-xl bg-gray-900 text-white disabled:opacity-60"
-                disabled={importing}
-                onClick={async () => {
-                  const file = importFileRef.current?.files?.[0];
-                  if (!file) { pushToast("Choose CSV-file"); return; }
-                  setImporting(true);
-                  try {
-                    const fd = new FormData();
-                    fd.set("client", importClient);
-                    fd.set("file", file);
-                    const res = await fetch("/api/import", { method: "POST", body: fd });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data?.error || "Import failed");
-                    pushToast(`Import OK: campaigns +${data.campaignsCreated}, metrics lines ${data.metricRowsUpserted}`);
-                    // reload current client data
-                    setClientId(importClient);
-                    await onRefresh();
-                    setImportOpen(false);
-                  } catch {
-                    pushToast("Import error");
-                  } finally {
-                    setImporting(false);
-                  }
-                }}
-              >
-                {importing ? "Importing…" : "Import"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <SettingsModal
+        settings={settings}
+        setSettings={setSettings}
+        setSettingsOpen={setSettingsOpen}
+        defaultSettings={DEFAULT_SETTINGS}
+      />
     )}
 
-
+      {/* Hotkeys help */}
+      {showHotkeys && (
+        <HotKeysModal setShowHotkeys={setShowHotkeys} />
+      )}
     </div>
   );
 }
 
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={<div className="p-6">Loading…</div>}>
-      <DashboardInner />
-    </Suspense>
-  );
-}
