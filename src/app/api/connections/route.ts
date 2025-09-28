@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { Provider, ConnectionStatus, ConnectionMode } from "@prisma/client";
 import { prisma } from "../../../lib/db";
 
 
-const AVAILABLE_PROVIDERS: Provider[] = [Provider.GOOGLE_ADS, Provider.META_ADS];
+type Provider = "GOOGLE_ADS" | "META_ADS";
+type ConnectionStatus = "connected" | "disconnected";
+type ConnectionMode = "demo" | "live";
+
+const AVAILABLE_PROVIDERS: Provider[] = ["GOOGLE_ADS", "META_ADS"];
 
 export async function GET(req: Request) {
   try {
@@ -31,8 +34,8 @@ export async function GET(req: Request) {
       if (row) return row;
       return {
         provider: p,
-        status: ConnectionStatus.disconnected,
-        mode: ConnectionMode.demo,
+        status: "disconnected" as ConnectionStatus,
+        mode: "demo" as ConnectionMode,
         externalAccountRef: null as string | null,
       };
     });

@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { Provider, ConnectionStatus, ConnectionMode } from "@prisma/client";
 import { prisma } from "../../../../../lib/db";
 
-
+type Provider = "GOOGLE_ADS" | "META_ADS";
 
 function normalizeProvider(slug: string | undefined): Provider | null {
   if (!slug) return null;
   const s = slug.toLowerCase();
-  if (s === "google") return Provider.GOOGLE_ADS;
-  if (s === "meta") return Provider.META_ADS;
+  if (s === "google") return "GOOGLE_ADS";
+  if (s === "meta") return "META_ADS";
   return null;
 }
 
@@ -28,20 +27,30 @@ export async function POST(
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
 
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      await prisma.client.create({
+        data: {
+          key: ['tape','kolo','lapa','milo','zora'][Math.random() * 5 | 0] + (Math.random() * 100 | 0),
+          name: ['Big','New','The','Mega','Premium'][Math.random() * 5 | 0] + ' ' + ['Service','Solution','Company','Business','PRO Group'][Math.random() * 5 | 0],
+        },
+      });
+    }
+
     const found = await prisma.connection.findFirst({
       where: { clientId, provider },
       select: { id: true },
     });
 
     const externalAccountRef =
-      provider === Provider.GOOGLE_ADS ? "demo-google-account" : "demo-meta-account";
+      provider === "GOOGLE_ADS" ? "demo-google-account" : "demo-meta-account";
 
     if (found) {
       await prisma.connection.update({
         where: { id: found.id },
         data: {
-          status: ConnectionStatus.connected,
-          mode: ConnectionMode.demo,
+          status: "connected",
+          mode: "demo",
           externalAccountRef,
         },
       });
@@ -50,8 +59,8 @@ export async function POST(
         data: {
           clientId,
           provider,
-          status: ConnectionStatus.connected,
-          mode: ConnectionMode.demo,
+          status: "connected",
+          mode: "demo",
           externalAccountRef,
         },
       });

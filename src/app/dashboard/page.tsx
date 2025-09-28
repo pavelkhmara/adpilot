@@ -20,6 +20,7 @@ import Connections from "../../components/dashboard/Connections";
 import ActionsLog, { type ActionEntry } from "../../components/dashboard/ActionsLog";
 import SettingsModal from "../../components/dashboard/SettingsModal";
 import HotKeysModal from "../../components/dashboard/HotKeysModal";
+import { ConnectionsPanel } from "@/components/connections/ConnectionsPanel";
 
 // ----- constants / types -----
 
@@ -85,6 +86,7 @@ export default function DashboardPage() {
 // ----- main component -----
 
 function DashboardInner() {
+  const clientUniqueId = 'cmg0y75gj00du7kocwj8o4s8n';
   const sp = useSearchParams();
   const { pushToast } = useToasts();
 
@@ -368,6 +370,7 @@ function DashboardInner() {
       {/* Content */}
       <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6 text-gray-900 dark:text-gray-100">
         {/* Connections */}
+        <ConnectionsPanel clientId={clientUniqueId} />
         <Connections />
 
         {/* KPIs */}
