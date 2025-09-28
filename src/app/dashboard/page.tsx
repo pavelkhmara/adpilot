@@ -21,6 +21,7 @@ import ActionsLog, { type ActionEntry } from "../../components/dashboard/Actions
 import SettingsModal from "../../components/dashboard/SettingsModal";
 import HotKeysModal from "../../components/dashboard/HotKeysModal";
 import { ConnectionsPanel } from "@/components/connections/ConnectionsPanel";
+import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
 
 // ----- constants / types -----
 
@@ -160,6 +161,9 @@ function DashboardInner() {
     refresh: onRefresh,
   } = useCampaigns(baseFilters);
 
+    const campaignIds = useMemo(() => campaigns.map(c => c.id), [campaigns]);
+    const { map: recMap } = useRecommendations(campaignIds);
+
   // keep URL in sync
   useUrlSync({
     client: clientId,
@@ -172,9 +176,18 @@ function DashboardInner() {
     to: dateTo || undefined,
   });
 
+  const campaignsWithRec = useMemo(() => {
+    if (!campaigns?.length) return campaigns;
+    return campaigns.map(c => ({
+        ...c,
+        recommendation: recMap[c.id] ?? c.recommendation, // если пришла свежая — берём её
+    }));
+    }, [campaigns, recMap]);
+
+
   // table sorting (client-side) -> CampaignTable expects already sorted rows
   const tableRows: CampaignRow[] = useMemo(() => {
-  const arr = [...campaigns];
+  const arr = [...campaignsWithRec];
   const key = sortBy;
   if (!key) return arr;
 
@@ -210,7 +223,7 @@ function DashboardInner() {
   });
 
   return arr;
-}, [campaigns, sortBy, sortDir]);
+}, [campaignsWithRec, sortBy, sortDir]);
 
 
   // totals (simple KPI)
@@ -291,8 +304,8 @@ function DashboardInner() {
 
   // alerts: берём из уже отфильтрованных кампаний
   const alertsRows = useMemo(
-    () => campaigns.map(c => ({ id: c.id, name: c.name, channel: c.channel, spend: c.spend, recommendation: c.recommendation })),
-    [campaigns]
+    () => campaignsWithRec.map(c => ({ id: c.id, name: c.name, channel: c.channel, spend: c.spend, recommendation: c.recommendation })),
+    [campaignsWithRec]
   );
 
   function download(filename: string, text: string) {

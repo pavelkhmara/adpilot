@@ -8,6 +8,7 @@ import { fmtInt, fmtMoney, safeStringify } from "../../../lib/utils";
 import Collapsible from "../../../components/UI/Collapsible";
 import Badge from "../../../components/UI/Badge";
 import { BarChart, Bar, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
 
 export type CampaignModalData = {
   id: string;
@@ -27,13 +28,14 @@ export type CampaignModalData = {
   cpaTrend?: Trend;
   ctrTrend?: Trend;
   // рекомендации
-  recommendation?: {
-    type: RecType;
-    title: string;
-    reason: string;
-    action?: { kind: "increase_budget"; by?: number } | { kind: "pause" } | { kind: "rotate_creatives" } | null;
-    risk?: string;
-  };
+  recommendation?: Recommendation
+  // {
+  //   type: RecType;
+  //   title: string;
+  //   reason: string;
+  //   action?: { kind: "increase_budget"; by?: number } | { kind: "pause" } | { kind: "rotate_creatives" } | null;
+  //   risk?: string;
+  // };
   // опционально подробности
   notes?: string[];
   raw?: unknown;     // сырые данные (для JSON секции)
@@ -47,13 +49,6 @@ export type CampaignAction =
 
 
 
-// interface Recommendation {
-//   type: RecType;
-//   title: string;
-//   reason: string;
-//   risk?: string;
-//   action?: RecAction | undefined;
-// }
 
 function RecommendationPill({ rec }: { rec: Recommendation }) {
   if (!rec) return <Badge tone="gray">No recommendations</Badge>;
@@ -102,10 +97,14 @@ const mockData = {
 export default function CampaignModal({ open, data, onClose, onAction }: { open: boolean; data: CampaignModalData | null; onClose: () => void; onAction: (a: CampaignAction) => void; }) {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
-  const [scaleBy, setScaleBy] = useState(0.15); // +15% по умолчанию
+  const [scaleBy, setScaleBy] = useState(0.15); // default +15%
 
   const roas = useMemo(() => (data && data.spend > 0 ? data.revenue / data.spend : 0), [data]);
   const cpa = useMemo(() => (data && data.conversions > 0 ? data.spend / data.conversions : 0), [data]);
+
+  const ids = data?.id ? [data.id] : [];
+  const { map: singleRecMap } = useRecommendations(ids);
+  const rec = data?.id ? (singleRecMap[data.id] ?? data.recommendation) : data?.recommendation;
 
   useEffect(() => {
     if (!data?.notes?.length) setNotesOpen(false);
@@ -129,7 +128,8 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
             <div className="text-lg font-semibold truncate" title={data.name}>{data.name}</div>
             <div className="mt-1 flex items-center gap-2 text-xs">
               <StatusBadge status={data.status} />
-              {data.recommendation && <RecBadge type={data.recommendation.type} text={data.recommendation.title} />}
+              {/* {data.recommendation && <RecBadge type={data.recommendation.type} text={data.recommendation.title} />} */}
+              {rec && <RecBadge type={rec.type} text={rec.title} />}
             </div>
           </div>
           <button className="text-gray-400 hover:text-gray-600" aria-label="Close" onClick={onClose}>✕</button>
