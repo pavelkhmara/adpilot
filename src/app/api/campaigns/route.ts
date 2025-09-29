@@ -3,6 +3,7 @@ import { fetchCampaigns } from "../../../server/campaigns/service";
 import { isValidYmd } from "../../../lib/dates";
 import { Channel, ClientId } from "../../../lib/types";
 import { prisma } from "../../../lib/db";
+import { cookies } from "next/headers";
 
 const isCuid = (v?: string | null) => !!v && /^c[a-z0-9]{24,}$/i.test(v);
 
@@ -42,12 +43,13 @@ function ymd(v: string | null): string | undefined {
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
 
     // 🟢 принимаем и ?client=, и ?clientId=
-    const clientParam = sp.get("client") ?? sp.get("clientId");
+    const clientParam = sp.get("client") ?? sp.get("clientId") ?? cookieClientId;
     if (!clientParam) {
       return NextResponse.json(
-        { error: "client is required (?client=acme or ?clientId=<cuid>)" },
+        { error: "client is required (?client=acme|?clientId=<id>) or via cookie" },
         { status: 400 }
       );
     }

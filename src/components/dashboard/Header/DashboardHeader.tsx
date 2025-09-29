@@ -13,13 +13,13 @@ type Props = {
   setImportOpen: (v: boolean) => void;
   loadError: string | null;
   clientId: ClientId;
-  clientsList: ClientOption[];
-  setClientId: (id: ClientId) => void;
+  clientsList?: Array<{id:string; name:string}>;
   onExportCsv: () => void;
   shareReadOnlyLink: () => void;
+  onLogout: () => void;
 };
 
-export default function DashboardHeader({ readOnly, onRefresh, refreshing, setSettingsOpen, setImportOpen, loadError, clientId, clientsList, setClientId, onExportCsv, shareReadOnlyLink }: Props ) {
+export default function DashboardHeader({ readOnly, onRefresh, refreshing, setSettingsOpen, setImportOpen, loadError, clientId, clientsList, onExportCsv, shareReadOnlyLink, onLogout }: Props ) {
     
   return (
     <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">
@@ -59,20 +59,11 @@ export default function DashboardHeader({ readOnly, onRefresh, refreshing, setSe
                     </button>
                     </>
                 )}
-                <select
-                    className="px-3 py-1.5 rounded-xl border text-sm"
-                    value={clientId}
-                    onChange={(e) => setClientId(toClientId(e.target.value))}
-                    aria-label="Select client"
-                >
-                    {clientsList.map(c => <option 
-                                            className="dark:bg-gray-900 dark:text-white"
-                                            key={c.id} value={c.id}
-                                            >
-                                                {c.name}
-                                            </option>
-                                        )}
-                </select>
+                {onLogout && (
+                    <button onClick={onLogout} className="px-3 py-1 rounded-lg border" title='Logout' aria-label='logout'>
+                        Log out
+                    </button>
+                )}
                 {!readOnly && (
                     <button 
                         className="px-3 py-1.5 rounded-xl border border-gray-300 hover:bg-gray-100 text-sm" 

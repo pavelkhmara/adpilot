@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
+import { cookies } from "next/headers";
 
 
 type Provider = "GOOGLE_ADS" | "META_ADS";
@@ -11,7 +12,8 @@ const AVAILABLE_PROVIDERS: Provider[] = ["GOOGLE_ADS", "META_ADS"];
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId");
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
+    const clientId = searchParams.get("clientId") ?? cookieClientId;
 
     if (!clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });

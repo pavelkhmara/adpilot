@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/db";
+import { cookies } from "next/headers";
 
 type Provider = "GOOGLE_ADS" | "META_ADS";
 
@@ -23,21 +24,22 @@ export async function POST(
     }
 
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId");
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
+    const clientId = searchParams.get("clientId") ?? cookieClientId;
     if (!clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
 
-    const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
-    if (!client) {
-      await prisma.client.create({
-        data: {
-          id: clientId,
-          key: ['tape','kolo','lapa','milo','zora'][Math.random() * 5 | 0] + (Math.random() * 100 | 0),
-          name: ['Big','New','The','Mega','Premium'][Math.random() * 5 | 0] + ' ' + ['Service','Solution','Company','Business','PRO Group'][Math.random() * 5 | 0],
-        },
-      });
-    }
+    // const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
+    // if (!client) {
+    //   await prisma.client.create({
+    //     data: {
+    //       id: clientId,
+    //       key: ['tape','kolo','lapa','milo','zora'][Math.random() * 5 | 0] + (Math.random() * 100 | 0),
+    //       name: ['Big','New','The','Mega','Premium'][Math.random() * 5 | 0] + ' ' + ['Service','Solution','Company','Business','PRO Group'][Math.random() * 5 | 0],
+    //     },
+    //   });
+    // }
 
     const externalAccountRef = provider === "GOOGLE_ADS" ? "demo-google-account" : "demo-meta-account";
 

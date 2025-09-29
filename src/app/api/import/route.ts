@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { importCsvForClient } from "../../../server/import/service";
 import { ClientId } from "../../../lib/types";
 import { prisma } from "../../../lib/db";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,8 @@ function toClientId(v: string | null): ClientId | null {
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
-    const clientParam = toClientId(form.get("client")?.toString() ?? null);
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
+    const clientParam = toClientId(form.get("client")?.toString() ?? null) ?? cookieClientId;
     const file = form.get("file");
 
     if (!clientParam) {

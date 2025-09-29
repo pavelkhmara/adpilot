@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
+import { cookies } from "next/headers";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId");
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
+    const clientId = searchParams.get("clientId") ?? cookieClientId;
     const campaignId = searchParams.get("campaignId");
 
     if (!clientId && !campaignId) {

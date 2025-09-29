@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/db";
+import { cookies } from "next/headers";
 
 type Provider = "GOOGLE_ADS" | "META_ADS";
 function normalizeProvider(slug: string | undefined): Provider | null {
@@ -17,7 +18,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ provider: stri
     if (!provider) return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
 
     const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get("clientId");
+    const cookieClientId = (await cookies()).get("clientId")?.value || null;
+    const clientId = searchParams.get("clientId") ?? cookieClientId;
     if (!clientId) return NextResponse.json({ error: "clientId is required" }, { status: 400 });
 
     const found = await prisma.connection.findFirst({
