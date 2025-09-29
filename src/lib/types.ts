@@ -10,7 +10,7 @@ export type ClientId = string;
 
 export type Recommendation = {
   action?: RecAction;
-  campaignId: string;
+  campaignId?: string;
   reason: string;
   risk?: string;
   title: string;
