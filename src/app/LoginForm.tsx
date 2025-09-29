@@ -37,7 +37,7 @@ export default function LoginForm() {
     <form className="space-y-3" onSubmit={onSubmit}>
       <label className="block">
         <div className="text-sm text-gray-600 mb-1">
-          Client key (e.g. <code>acme</code>)
+          Client key (demo client accounts: <code>acme</code>, <code>orbit</code>, <code>nova</code>, <code>zen</code>)
         </div>
         <input name="key" placeholder="acme" className="w-full px-3 py-2 rounded-xl border" />
       </label>
