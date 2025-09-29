@@ -1,3 +1,5 @@
+import { UiRec } from "@/app/api/recommendations/by-campaign/route";
+
 export type Channel = "Google Ads" | "Meta Ads";
 export type Status = "Active" | "Learning" | "Paused";
 
@@ -7,11 +9,12 @@ export type ClientId = string;
 
 
 export type Recommendation = {
-  type: RecType;
-  title: string;
+  action?: RecAction;
+  campaignId: string;
   reason: string;
   risk?: string;
-  action?: RecAction;
+  title: string;
+  type: RecType;
 };
 
 export type RecType = "pause" | "scale" | "creative" | "none";
@@ -45,7 +48,7 @@ export type CampaignRow = {
   roasTrend?: Trend;
   cpaTrend?: Trend;
   ctrTrend?: Trend;
-  recommendation?: Recommendation;
+  recommendation?: Recommendation | UiRec;
   notes?: string[];
 };
 

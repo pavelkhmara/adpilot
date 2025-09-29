@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 
-type UiRec = {
-  id: string;
+export type UiRec = {
   campaignId: string;
-  type: "pause" | "scale" | "creative" | "none";
-  title: string;
-  reason?: string;
-  priority: number;
   createdAt: string;
+  id?: string;
+  priority: number;
+  reason?: string;
+  title: string;
+  type: "pause" | "scale" | "creative" | "none";
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────

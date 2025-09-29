@@ -4,7 +4,7 @@ import ClientDashboard from "./ClientDashboard";
 
 export default async function Page() {
   const clientId = (await cookies()).get("clientId")?.value || null;
-  if (!clientId) redirect("/"); // нет логина → на страницу входа
+  if (!clientId) redirect("/");
 
   return <ClientDashboard clientId={clientId} />;
 }

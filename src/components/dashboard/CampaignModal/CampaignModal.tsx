@@ -9,6 +9,7 @@ import Collapsible from "../../../components/UI/Collapsible";
 import Badge from "../../../components/UI/Badge";
 import { BarChart, Bar, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
+import { UiRec } from "@/app/api/recommendations/by-campaign/route";
 
 export type CampaignModalData = {
   id: string;
@@ -28,7 +29,7 @@ export type CampaignModalData = {
   cpaTrend?: Trend;
   ctrTrend?: Trend;
   // рекомендации
-  recommendation?: Recommendation
+  recommendation?: Recommendation | UiRec
   // {
   //   type: RecType;
   //   title: string;
@@ -50,7 +51,7 @@ export type CampaignAction =
 
 
 
-function RecommendationPill({ rec }: { rec: Recommendation }) {
+function RecommendationPill({ rec }: { rec: Recommendation | UiRec }) {
   if (!rec) return <Badge tone="gray">No recommendations</Badge>;
   const tone =
     rec.type === "scale"
@@ -177,9 +178,9 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
                     Reason: {rec.reason}
                   </div>
                 )}
-                {rec.risk && (
-                  <div className="text-amber-700 text-xs">Potential risk: {rec.risk}</div>
-                )}
+                {/* {rec?.risk && (
+                  <div className="text-amber-700 text-xs">Potential risk: {rec?.risk}</div>
+                )} */}
               </div>
             ) : (
               <div className="text-gray-500">No current recommendations</div>

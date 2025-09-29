@@ -52,3 +52,5 @@ src/app/test
 make-context-pack.mjs
 repo-context.config.json
 ctx-pack.md
+
+/docs

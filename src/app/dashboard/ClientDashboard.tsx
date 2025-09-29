@@ -20,6 +20,7 @@ import SettingsModal from "../../components/dashboard/SettingsModal";
 import HotKeysModal from "../../components/dashboard/HotKeysModal";
 import { ConnectionsPanel } from "@/components/connections/ConnectionsPanel";
 import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
+import { log } from "console";
 
 // ----- props -----
 export default function ClientDashboard({ clientId }: { clientId: ClientId }) {
@@ -118,6 +119,8 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
 
   const campaignIds = useMemo(() => campaigns.map(c => c.id), [campaigns]);
   const { map: recMap } = useRecommendations(campaignIds);
+  console.log('reco: ', recMap);
+  
 
   // keep URL in sync
   useUrlSync({
@@ -199,11 +202,13 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     const data: CampaignModalData = { ...row, raw: row };
     setSelected(data); setModalOpen(true);
   };
+
   const handleAction = (a: CampaignAction) => {
     if (a.type === "pause") pushToast("Paused (demo)");
     else if (a.type === "scale") pushToast(`Scaled by +${Math.round(a.by * 100)}% (demo)`);
     else if (a.type === "rotate_creatives") pushToast("Rotate creatives (demo)");
   };
+
   const onGenerateAction = (row: CampaignRow) => {
     const recType = row.recommendation?.type ?? "none";
     const entry: ActionEntry = {
@@ -230,6 +235,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     a.href = url; a.download = filename; document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
+
   function toCsv(rows: CampaignRow[]) {
     const headers = ["Channel","Campaign","Status","Spend","Revenue","ROAS","CPA","CTR"];
     const lines = rows.map((c) => [
@@ -241,11 +247,13 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     const csv = [headers, ...lines].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     return csv;
   }
+
   function onExportCsv() {
     const csv = toCsv(tableRows);
     download(`adpilot_campaigns_${new Date().toISOString().slice(0,10)}.csv`, csv);
     pushToast("CSV exported");
   }
+
   function buildReadonlyLink(): string {
     const params = new URLSearchParams();
     if (clientId) params.set("client", clientId);
@@ -256,16 +264,16 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     const qs = params.toString();
     return `${window.location.origin}${window.location.pathname}${qs ? `?${qs}` : ""}`;
   }
+
   function shareReadOnlyLink() {
     const link = buildReadonlyLink();
     navigator.clipboard.writeText(link).then(() => pushToast("Read-only link copied")).catch(() => {});
   }
 
-  // ЛОГАУТ в хедере
   async function onLogout() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/"; // редирект на логин
+      window.location.href = "/";
     } catch {}
   }
 
