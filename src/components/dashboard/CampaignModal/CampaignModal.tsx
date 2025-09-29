@@ -149,7 +149,7 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
             <Kpi label="Conv." value={fmtInt(data.conversions)} />
           </section>
 
-          <div className="text-sm">
+          {/* <div className="text-sm">
             <div className="text-gray-500 mb-1">Recommendation</div>
             {data.recommendation ? (
               <div className="space-y-1">
@@ -161,6 +161,24 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
                 )}
                 {data.recommendation.risk && (
                   <div className="text-amber-700 text-xs">Potential risk: {data.recommendation.risk}</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-gray-500">No current recommendations</div>
+            )}
+          </div> */}
+          <div className="text-sm">
+            <div className="text-gray-500 mb-1">Recommendation</div>
+            {rec ? (
+              <div className="space-y-1">
+                <RecommendationPill rec={rec} />
+                {rec?.reason && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    Reason: {rec.reason}
+                  </div>
+                )}
+                {rec.risk && (
+                  <div className="text-amber-700 text-xs">Potential risk: {rec.risk}</div>
                 )}
               </div>
             ) : (

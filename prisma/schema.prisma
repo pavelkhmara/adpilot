@@ -109,4 +109,6 @@ model Recommendation {
   updatedAt  DateTime @updatedAt @db.Timestamptz
 
   @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([campaignId, priority, createdAt])
 }

@@ -1,31 +1,30 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 
-type RecOut = {
+type UiRec = {
+  id: string;
   campaignId: string;
-  recommendation: {
-    type: "pause" | "scale" | "creative" | "none";
-    title: string;
-    reason?: string;
-  };
+  type: "pause" | "scale" | "creative" | "none";
+  title: string;
+  reason?: string;
+  priority: number;
+  createdAt: string;
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function isJsonObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
-function normalizeType(actionType: string): RecOut["recommendation"]["type"] {
+const normType = (actionType: string): UiRec["type"] => {
   const t = actionType.toLowerCase();
   if (t.includes("pause")) return "pause";
   if (t.includes("creative")) return "creative";
   if (t.includes("budget") || t.includes("bid") || t.includes("scale")) return "scale";
   return "none";
-}
+};
 
 function makeTitle(actionType: string, payload: unknown): string {
   const t = actionType;
-  if (isJsonObject(payload)) {
+  if (isObj(payload)) {
     // простые красивые названия для самых частых кейсов
     if (typeof payload.pct === "number" && /decrease.*budget/i.test(t)) {
       return `Decrease budget by ${payload.pct}%`;
@@ -44,27 +43,13 @@ function makeTitle(actionType: string, payload: unknown): string {
   return t;
 }
 
-function makeReason(reason: unknown): string | undefined {
-  if (reason == null) return undefined;
+const makeReason = (reason: unknown): string | undefined => {
+  if (!reason) return undefined;
   if (typeof reason === "string") return reason;
-  if (Array.isArray(reason)) {
-    // массив строк/чисел → склеим
-    return reason.map((x) => String(x)).join(", ");
-  }
-  if (isJsonObject(reason)) {
-    // популярный формат: { rules: ["a","b"] } или { note: "..." }
-    if (Array.isArray(reason.rules)) {
-      return reason.rules.map((x) => String(x)).join(", ");
-    }
-    // иначе вытащим первые 2-3 ключа
-    const entries = Object.entries(reason)
-      .slice(0, 3)
-      .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
-    return entries.join("; ");
-  }
-  // число/boolean
-  return String(reason);
-}
+  if (Array.isArray(reason)) return reason.map(String).join(", ");
+  if (isObj(reason) && Array.isArray(reason.rules)) return reason.rules.map(String).join(", ");
+  return typeof reason === "object" ? JSON.stringify(reason) : String(reason);
+};
 
 // ── handler ───────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
@@ -75,6 +60,14 @@ export async function GET(req: Request) {
   if (ids.length === 0) {
     return NextResponse.json({ items: [] }, { status: 200 });
   }
+
+// const owned = await prisma.campaign.findMany({
+//     where: { id: { in: ids }, clientId: currentClientIdFromSession },
+//     select: { id: true },
+// });
+// const ownedIds = new Set(owned.map(x => x.id));
+// const filtered = ids.filter(id => ownedIds.has(id));
+// if (!filtered.length) return NextResponse.json({ items: [] });
 
   // Берём «кандидатов» и выберем по 1 лучшей на кампанию
   const rows = await prisma.recommendation.findMany({
@@ -88,16 +81,15 @@ export async function GET(req: Request) {
     if (!bestByCampaign.has(r.campaignId)) bestByCampaign.set(r.campaignId, r);
   }
 
-  const items: RecOut[] = [];
-  for (const r of bestByCampaign.values()) {
-    const type = normalizeType(r.actionType);
-    const title = makeTitle(r.actionType, r.payload);
-    const reasonStr = makeReason(r.reason); // безопасно для JsonValue
-    items.push({
-      campaignId: r.campaignId,
-      recommendation: { type, title, reason: reasonStr },
-    });
-  }
+  const items: UiRec[] = [...bestByCampaign.values()].map(r => ({
+    id: r.id,
+    campaignId: r.campaignId,
+    type: normType(r.actionType),
+    title: makeTitle(r.actionType, r.payload),
+    reason: makeReason(r.reason),
+    priority: r.priority,
+    createdAt: r.createdAt.toISOString(),
+  }));
 
   return NextResponse.json({ items });
 }
