@@ -27,8 +27,9 @@ export default function LoginForm() {
       }
       // Куки выставятся на ответе роутера → переходим в дашборд
       window.location.href = "/dashboard";
-    } catch (e) {
-      alert("Network error");
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      alert("Network error" + err.message);
       setLoading(false);
     }
   }

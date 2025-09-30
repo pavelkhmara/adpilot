@@ -1,21 +1,21 @@
 "use client";
 import RecBadge from "../../../components/UI/RecBadge";
 import StatusBadge from "../../../components/UI/StatusBadge";
-import { Status, RecType, Trend, Channel, Recommendation } from "../../../lib/types";
+import { Trend, Channel, Rec } from "../../../lib/types";
 import React, { useEffect, useMemo, useState } from "react";
 import Kpi from "../Kpi";
 import { fmtInt, fmtMoney, safeStringify } from "../../../lib/utils";
 import Collapsible from "../../../components/UI/Collapsible";
 import Badge from "../../../components/UI/Badge";
-import { BarChart, Bar, Rectangle, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, Rectangle, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
-import { UiRec } from "@/app/api/recommendations/by-campaign/route";
+import { toUiRec, UiRec } from "@/features/campaigns/mapRecToUi";
 
 export type CampaignModalData = {
   id: string;
   channel: Channel;
   name: string;
-  status: Status;
+  status: string;
   // агрегаты периода
   impressions: number;
   clicks: number;
@@ -29,7 +29,7 @@ export type CampaignModalData = {
   cpaTrend?: Trend;
   ctrTrend?: Trend;
   // рекомендации
-  recommendation?: Recommendation | UiRec
+  recommendation?: Rec;
   // {
   //   type: RecType;
   //   title: string;
@@ -51,7 +51,7 @@ export type CampaignAction =
 
 
 
-function RecommendationPill({ rec }: { rec: Recommendation | UiRec }) {
+function RecommendationPill({ rec }: { rec: UiRec }) {
   if (!rec) return <Badge tone="gray">No recommendations</Badge>;
   const tone =
     rec.type === "scale"
@@ -61,7 +61,7 @@ function RecommendationPill({ rec }: { rec: Recommendation | UiRec }) {
       : rec.type === "creative"
       ? "amber"
       : "blue";
-  return <Badge tone={tone}>{rec.title}</Badge>;
+  return <Badge tone={tone}>{rec.reason}</Badge>;
 }
 
 const generateMockSeries = (days: number = 7) => {
@@ -105,7 +105,8 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
 
   const ids = data?.id ? [data.id] : [];
   const { map: singleRecMap } = useRecommendations(ids);
-  const rec = data?.id ? (singleRecMap[data.id] ?? data.recommendation) : data?.recommendation;
+  const recommendation = data?.id ? (singleRecMap[data.id] ?? data.recommendation) : data?.recommendation;
+  const rec= toUiRec(recommendation);
 
   useEffect(() => {
     if (!data?.notes?.length) setNotesOpen(false);

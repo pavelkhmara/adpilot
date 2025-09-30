@@ -1,98 +1,330 @@
-import { prisma } from "../../lib/db";
+import { prisma } from "@/lib/db";
+import { CampaignListItem } from "@/lib/contracts/campaigns";
+import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { Decimal } from "@prisma/client/runtime/library";
-import type { ListCampaignsResponse, ServerFetchFilters } from "./dto";
-import type { CampaignRow } from "../../lib/types";
 
-const toNum = (v: number | Decimal | null | undefined) =>
+// ——— простые хелперы дат (работаем по дате в UTC, где MetricDaily.date — полночь UTC)
+function startOfUTC(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+function addDays(d: Date, n: number) {
+  const r = new Date(d);
+  r.setUTCDate(r.getUTCDate() + n);
+  return r;
+}
+function rangeLastNDays(n: number) {
+  // today включительно
+  const today = startOfUTC(new Date());
+  const from = addDays(today, -(n - 1));
+  const toExcl = addDays(today, 1); // полуинтервал [from, to)
+  return { from, toExcl, today };
+}
+
+type ListArgs = {
+  clientId: string;
+  status?: string[];
+  channel?: string[];
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
+type MetricSum = {
+  impressions: number | Prisma.Decimal | null;
+  clicks: number | Prisma.Decimal | null;
+  spend: number | Prisma.Decimal | null;
+  conversions: number | Prisma.Decimal | null;
+  revenue: number | Prisma.Decimal | null;
+};
+
+const toNum = (v: number | Prisma.Decimal | null | undefined) =>
   v == null ? 0 : Number(v);
 
-export async function fetchCampaigns(filters: ServerFetchFilters): Promise<ListCampaignsResponse> {
-  const {
-    clientId,
-    channel,
-    q,
-    dateFrom,
-    dateTo,
-    limit = 50,
-    offset = 0,
-  } = filters;
+export async function listCampaigns(args: ListArgs) {
+  const { from: d7from, toExcl: d7to } = rangeLastNDays(7);
+  const { from: d30from, toExcl: d30to } = rangeLastNDays(30);
+  const { from: tFrom, toExcl: tTo } = rangeLastNDays(1);
 
-  if (!clientId) return { items: [] };
-
-  const whereCampaign: Prisma.CampaignWhereInput = {
-    clientId,
-    ...(channel ? { channel } : {}),
-    ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
-  };
-
+  // 1) базовый список кампаний (легковесный select)
   const campaigns = await prisma.campaign.findMany({
-    where: whereCampaign,
-    select: { id: true, name: true, channel: true, status: true },
-    orderBy: { createdAt: "desc" },
-    skip: offset,
-    take: limit,
-  });
-
-  if (campaigns.length === 0) return { items: [] };
-
-  const whereDaily: Prisma.MetricDailyWhereInput = {
-    campaignId: { in: campaigns.map(c => c.id) },
-    ...(dateFrom ? { date: { gte: new Date(dateFrom) } } : {}),
-    ...(dateTo ? { date: { ...(dateFrom ? { gte: new Date(dateFrom) } : {}), lte: new Date(dateTo) } } : {}),
-  };
-
-  const sums = await prisma.metricDaily.groupBy({
-    by: ["campaignId"],
-    where: whereDaily,
-    _sum: {
-      impressions: true,
-      clicks: true,
-      spend: true,
-      conversions: true,
-      revenue: true,
+    where: {
+      clientId: args.clientId,
+      ...(args.status?.length ? { status: { in: args.status } } : {}),
+      ...(args.channel?.length ? { channel: { in: args.channel } } : {}),
+      ...(args.search
+        ? { name: { contains: args.search, mode: "insensitive" } }
+        : {}),
     },
-    _avg: { frequency: true, ctr: true },
+    select: {
+      id: true,
+      name: true,
+      channel: true,
+      status: true,
+      updatedAt: true, 
+    },
+    orderBy: { updatedAt: "desc" },
+    skip: args.offset ?? 0,
+    take: args.limit ?? 200,
   });
 
-  const map = new Map(sums.map(s => [s.campaignId, s]));
+  const ids = campaigns.map(c => c.id);
+  if (ids.length === 0) {
+    return { items: [] as typeof items, generatedAt: new Date().toISOString() };
+  }
 
-  const items: CampaignRow[] = campaigns.map(c => {
-    const s = map.get(c.id);
-    const impressions = toNum(s?._sum.impressions);
-    const clicks = toNum(s?._sum.clicks);
-    const spend = toNum(s?._sum.spend);
-    const conversions = toNum(s?._sum.conversions);
-    const revenue = toNum(s?._sum.revenue);
+  // 2) агрегаты KPI today / 7 / 30
+  // MetricDaily: { date: Date (UTC day), campaignId, impressions, clicks, spend, conversions, revenue }
+  const md = await prisma.metricDaily.groupBy({
+    by: ["campaignId"],
+    _sum: { impressions: true, clicks: true, spend: true, conversions: true, revenue: true },
+    where: { campaignId: { in: ids }, date: { gte: tFrom, lt: tTo } },
+  });
+  const md7 = await prisma.metricDaily.groupBy({
+    by: ["campaignId"],
+    _sum: { impressions: true, clicks: true, spend: true, conversions: true, revenue: true },
+    where: { campaignId: { in: ids }, date: { gte: d7from, lt: d7to } },
+  });
+  const md30 = await prisma.metricDaily.groupBy({
+    by: ["campaignId"],
+    _sum: { impressions: true, clicks: true, spend: true, conversions: true, revenue: true },
+    where: { campaignId: { in: ids }, date: { gte: d30from, lt: d30to } },
+  });
 
-    // const ctr = impressions > 0 ? clicks / impressions : 0;
-    const cpc = clicks > 0 ? spend / clicks : 0;
-    const roas = spend > 0 ? revenue / spend : 0;
-    const frequency = Number(s?._avg.frequency ?? 0);
-    const ctr = Number(s?._avg.ctr ?? 0);
+  const todayBy = Object.fromEntries(
+    md.map(r => [r.campaignId, r._sum])
+  );
+  const d7By = Object.fromEntries(
+    md7.map(r => [r.campaignId, r._sum])
+  );
+  const d30By = Object.fromEntries(
+    md30.map(r => [r.campaignId, r._sum])
+  );
 
-    return {
+  // 3) спарклайны на 7 дней (расход/конв/roas по дням)
+  const sparkRaw = await prisma.metricDaily.findMany({
+    where: { campaignId: { in: ids }, date: { gte: d7from, lt: d7to } },
+    select: { campaignId: true, date: true, spend: true, conversions: true, revenue: true },
+    orderBy: [{ campaignId: "asc" }, { date: "asc" }],
+  });
+  const sparkBy = new Map<string, { spend: number[]; conv: number[]; roas: number[] }>();
+  for (const c of campaigns) {
+    sparkBy.set(c.id, { spend: [], conv: [], roas: [] });
+  }
+  // подготовим календарь последних 7 дней для выравнивания пропусков
+  const days: string[] = [];
+  for (let i = 0; i < 7; i++) days.push(addDays(d7from, i).toISOString().slice(0, 10));
+
+  const group = new Map<string, Map<string, { spend: number; conv: number; rev: number }>>();
+  for (const row of sparkRaw) {
+    const key = row.campaignId;
+    const day = row.date.toISOString().slice(0, 10);
+    if (!group.has(key)) group.set(key, new Map());
+    group.get(key)!.set(day, { spend: Number(row.spend || 0), conv: Number(row.conversions || 0), rev: Number(row.revenue || 0) });
+  }
+  for (const id of ids) {
+    const g = group.get(id);
+    const vec = sparkBy.get(id)!;
+    for (const d of days) {
+      const v = g?.get(d) ?? { spend: 0, conv: 0, rev: 0 };
+      vec.spend.push(v.spend);
+      vec.conv.push(v.conv);
+      vec.roas.push(v.spend > 0 ? v.rev / v.spend : 0);
+    }
+  }
+
+  // 4) последняя (наиболее приоритетная) рекомендация на кампанию — компактно
+  const latest = await prisma.recommendation.findMany({
+    where: { campaignId: { in: ids }, status: { in: ["proposed", "applied"] } },
+    select: { id: true, type: true, priorityScore: true, campaignId: true },
+    orderBy: [{ priorityScore: "desc" }, { createdAt: "desc" }],
+  });
+
+  // берём первую на кампанию
+  const latestBy = new Map<string, { id: string; type: string; priority: number }>();
+  for (const r of latest) {
+    if (!r.campaignId) continue;
+    if (!latestBy.has(r.campaignId)) {
+      latestBy.set(r.campaignId, {
+        id: r.id,
+        type: r.type,
+        priority: Number(r.priorityScore || 0),
+      });
+    }
+  }
+
+  // 5) пейсинг (снимок на сегодня)
+  const pacing = await prisma.pacingSnapshot.findMany({
+    where: { campaignId: { in: ids } },
+    orderBy: [{ date: "desc" }],
+    take: ids.length * 1, // простая эвристика
+  });
+  const pacingBy = new Map<string, { expectedToDate: number; actualToDate: number; delta: number; planMonth?: string }>();
+  for (const p of pacing) {
+    pacingBy.set(p.campaignId, {
+      expectedToDate: Number(p.expectedSpendToDate || 0),
+      actualToDate: Number(p.actualSpendToDate || 0),
+      delta: Number(p.delta || 0),
+      planMonth: undefined,
+    });
+  }
+
+  // 6) сбор финального списка
+  const items = campaigns.map((c) => {
+    const agg = (s?: MetricSum) => {
+      if (!s) return undefined;
+      const impressions = toNum(s.impressions);
+      const clicks = toNum(s.clicks);
+      const spend = toNum(s.spend);
+      const revenue = toNum(s.revenue);
+      const conv = toNum(s.conversions);
+      return {
+        impressions,
+        clicks,
+        spend,
+        conv,
+        revenue,
+        cpa: conv > 0 ? spend / conv : null,
+        roas: spend > 0 ? revenue / spend : null,
+      };
+    };
+
+    const today = agg(todayBy[c.id]);
+    const d7 = agg(d7By[c.id]);
+    const d30 = agg(d30By[c.id]);
+    const spark = sparkBy.get(c.id)!;
+    const latestRec = latestBy.get(c.id);
+
+    type CampaignListItemType = z.infer<typeof CampaignListItem>;
+    const dto: CampaignListItemType = {
       id: c.id,
       name: c.name,
-      channel: c.channel as CampaignRow["channel"],
-      status: c.status as CampaignRow["status"],
-      impressions,
-      clicks,
-      spend,
-      conversions,
-      revenue,
-      ctr,
-      cpc,
-      roas,
-      frequency,
+      channel: c.channel,
+      status: c.status,
+      badges: {
+        learning: false,
+        limitedByBudget: false,
+        limitedByBid: false,
+        policyIssues: undefined,
+      },
+      budget: null,
+      today,
+      d7,
+      d30,
+      pacing: pacingBy.get(c.id) ?? null,
+      lastChangeAt: c.updatedAt?.toISOString() ?? null,
+      lastSyncAt: null,
+      latestRecommendation: latestRec ? { id: latestRec.id, type: latestRec.type, priority: latestRec.priority } : null,
+      sparkSpend7: spark.spend,
+      sparkConv7: spark.conv,
+      sparkRoas7: spark.roas,
     };
+
+    // строгая проверка схемой — бросит, если что-то не так
+    return CampaignListItem.parse(dto);
   });
 
-  return { items };
+  return { items, generatedAt: new Date().toISOString() };
 }
 
 
 
+
+
+//// V2
+// import { prisma } from "../../lib/db";
+// import { Prisma } from "@prisma/client";
+// import { Decimal } from "@prisma/client/runtime/library";
+// import type { ListCampaignsResponse, ServerFetchFilters } from "./dto";
+// import type { CampaignRow } from "../../lib/types";
+
+// const toNum = (v: number | Decimal | null | undefined) =>
+//   v == null ? 0 : Number(v);
+
+// export async function fetchCampaigns(filters: ServerFetchFilters): Promise<ListCampaignsResponse> {
+//   const {
+//     clientId,
+//     channel,
+//     q,
+//     dateFrom,
+//     dateTo,
+//     limit = 50,
+//     offset = 0,
+//   } = filters;
+
+//   if (!clientId) return { items: [] };
+
+//   const whereCampaign: Prisma.CampaignWhereInput = {
+//     clientId,
+//     ...(channel ? { channel } : {}),
+//     ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+//   };
+
+//   const campaigns = await prisma.campaign.findMany({
+//     where: whereCampaign,
+//     select: { id: true, name: true, channel: true, status: true },
+//     orderBy: { createdAt: "desc" },
+//     skip: offset,
+//     take: limit,
+//   });
+
+//   if (campaigns.length === 0) return { items: [] };
+
+//   const whereDaily: Prisma.MetricDailyWhereInput = {
+//     campaignId: { in: campaigns.map(c => c.id) },
+//     ...(dateFrom ? { date: { gte: new Date(dateFrom) } } : {}),
+//     ...(dateTo ? { date: { ...(dateFrom ? { gte: new Date(dateFrom) } : {}), lte: new Date(dateTo) } } : {}),
+//   };
+
+//   const sums = await prisma.metricDaily.groupBy({
+//     by: ["campaignId"],
+//     where: whereDaily,
+//     _sum: {
+//       impressions: true,
+//       clicks: true,
+//       spend: true,
+//       conversions: true,
+//       revenue: true,
+//     },
+//     _avg: { frequency: true, ctr: true },
+//   });
+
+//   const map = new Map(sums.map(s => [s.campaignId, s]));
+
+//   const items: CampaignRow[] = campaigns.map(c => {
+//     const s = map.get(c.id);
+//     const impressions = toNum(s?._sum.impressions);
+//     const clicks = toNum(s?._sum.clicks);
+//     const spend = toNum(s?._sum.spend);
+//     const conversions = toNum(s?._sum.conversions);
+//     const revenue = toNum(s?._sum.revenue);
+
+//     // const ctr = impressions > 0 ? clicks / impressions : 0;
+//     const cpc = clicks > 0 ? spend / clicks : 0;
+//     const roas = spend > 0 ? revenue / spend : 0;
+//     const frequency = Number(s?._avg.frequency ?? 0);
+//     const ctr = Number(s?._avg.ctr ?? 0);
+
+//     return {
+//       id: c.id,
+//       name: c.name,
+//       channel: c.channel,
+//       status: c.status,
+//       impressions,
+//       clicks,
+//       spend,
+//       conversions,
+//       revenue,
+//       ctr,
+//       cpc,
+//       roas,
+//       frequency,
+//     };
+//   });
+
+//   return { items };
+// }
+
+//// V1
 // import { prisma } from "../../lib/db";
 // import type { ServerFetchFilters as FetchFilters, ListCampaignsResponse as CampaignDTO } from "./dto";
 // import { Channel, Status } from "../../lib/types";

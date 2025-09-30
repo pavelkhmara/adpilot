@@ -1,11 +1,12 @@
 "use client";
+import { Channel } from "@/lib/types";
 import React, { useMemo } from "react";
 
 export type RecType = "pause" | "scale" | "creative" | "none";
 export type RowWithRec = {
   id: string;
   name: string;
-  channel: "Google Ads" | "Meta Ads";
+  channel: Channel;
   spend: number;
   recommendation?: { type: RecType; title: string; reason?: string };
 };

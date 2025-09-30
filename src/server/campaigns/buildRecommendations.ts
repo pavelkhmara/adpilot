@@ -1,4 +1,6 @@
-import { Channel, Recommendation } from "../../lib/types";
+import { Channel } from "@/lib/types";
+
+export type UiRec = { type: "pause" | "scale" | "creative"; title: string; reason?: string };
 
 export function buildRecommendation(input: {
   spend: number;
@@ -14,7 +16,7 @@ export function buildRecommendation(input: {
   minConversionsForScale?: number;
   fatigueFreq?: number;
   lowCtr?: number;
-}): Recommendation | undefined {
+}): UiRec | undefined {
   const {
     spend, revenue, conversions, ctr, frequency, channel,
     lowRoas = 1.5, highRoas = 3.0, minSpendForPause = 1000,

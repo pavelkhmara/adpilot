@@ -1,25 +1,17 @@
 import React from 'react'
 import Badge from '../../../components/UI/Badge'
-import { toClientId } from '../../../lib/utils'
-import type { ClientId } from "../../../lib/types";
 
-type ClientOption = { id: ClientId; name: string };
+// type ClientOption = { id: ClientId; name: string };
 
 type Props = {
   readOnly: boolean;
-  onRefresh: () => void;
-  refreshing: boolean;
   setSettingsOpen: (v: boolean) => void;
-  setImportOpen: (v: boolean) => void;
   loadError: string | null;
-  clientId: ClientId;
-  clientsList?: Array<{id:string; name:string}>;
-  onExportCsv: () => void;
   shareReadOnlyLink: () => void;
   onLogout: () => void;
 };
 
-export default function DashboardHeader({ readOnly, onRefresh, refreshing, setSettingsOpen, setImportOpen, loadError, clientId, clientsList, onExportCsv, shareReadOnlyLink, onLogout }: Props ) {
+export default function DashboardHeader({ readOnly, setSettingsOpen, loadError, shareReadOnlyLink, onLogout }: Props ) {
     
   return (
     <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">

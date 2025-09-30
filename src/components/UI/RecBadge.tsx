@@ -1,8 +1,6 @@
-
-import { RecType } from '../../lib/types';
 import React from 'react'
 
-export default function RecBadge({ type, text }: { type: RecType; text: string }) {
+export default function RecBadge({ type, text }: { type: string; text: string }) {
   const cls =
     type === "pause"
       ? "bg-red-100 text-red-700"

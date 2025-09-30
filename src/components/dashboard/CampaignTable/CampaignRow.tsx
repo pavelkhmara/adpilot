@@ -1,5 +1,5 @@
 "use client";
-import { CampaignRow as CampaignRowData, Channel, RecType, Status, Trend } from "../../../lib/types";
+import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
 import React from "react";
 
 
@@ -61,7 +61,18 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
       <td className="text-right p-3 py-1.5 tabular-nums">{row.frequency.toFixed(2)}</td>
 
       <td className="text-left p-3 py-1.5">
-        {row.recommendation ? <RecBadge type={row.recommendation.type} text={row.recommendation.title} /> : "—"}
+        {row.recommendation ? (
+          <RecBadge
+            type={row.recommendation.type}
+            text={
+              // если UiRec → reason || title; если DB Rec → reason
+              ("title" in row.recommendation)
+                ? (row.recommendation.reason || row.recommendation.title)
+                : (row.recommendation.reason ?? "")
+            }
+          />
+        ) : "—"}
+
       </td>
 
       <td className="text-right p-3 py-1.5 flex justify-end gap-2">
@@ -110,7 +121,7 @@ function TrendValue({
   );
 }
 
-function RecBadge({ type, text }: { type: RecType; text: string }) {
+function RecBadge({ type, text }: { type: string; text: string }) {
   const cls =
     type === "pause"
       ? "bg-red-100 text-red-700"

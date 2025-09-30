@@ -20,7 +20,9 @@ import SettingsModal from "../../components/dashboard/SettingsModal";
 import HotKeysModal from "../../components/dashboard/HotKeysModal";
 import { ConnectionsPanel } from "@/components/connections/ConnectionsPanel";
 import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
-import { log } from "console";
+import { toUiRec, type UiRec } from "@/features/campaigns/mapRecToUi";
+
+type CampaignRowUI = Omit<CampaignRow, "recommendation"> & { recommendation?: UiRec };
 
 // ----- props -----
 export default function ClientDashboard({ clientId }: { clientId: ClientId }) {
@@ -110,17 +112,19 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   } as const;
 
   const {
-    rows: campaigns,
+    campaigns,
     loading: refreshing,
     error: loadError,
     dateFrom, dateTo, setDateFrom, setDateTo,
     refresh: onRefresh,
   } = useCampaigns(baseFilters);
 
-  const campaignIds = useMemo(() => campaigns.map(c => c.id), [campaigns]);
+  const campaignIds = useMemo<string[]>(
+    () => campaigns.map((c: CampaignRow) => c.id),
+    [campaigns]
+  );
   const { map: recMap } = useRecommendations(campaignIds);
-  console.log('reco: ', recMap);
-  
+    
 
   // keep URL in sync
   useUrlSync({
@@ -134,13 +138,18 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     to: dateTo || undefined,
   });
 
-  const campaignsWithRec = useMemo(() => {
-    if (!campaigns?.length) return campaigns;
-    return campaigns.map(c => ({ ...c, recommendation: recMap[c.id] ?? c.recommendation }));
-  }, [campaigns, recMap]);
+  const campaignsWithRec: CampaignRowUI[] = useMemo(() => {
+  if (!campaigns || campaigns.length === 0) return [];
+  return campaigns.map((c: CampaignRow) => {
+    const ui: UiRec | undefined = recMap[c.id]
+      ? toUiRec(recMap[c.id])                 // DB → UI
+      : (c.recommendation as unknown as UiRec | undefined); // старые мок-данные
+    return { ...c, recommendation: ui };
+  });
+}, [campaigns, recMap]);
 
   // table sorting
-  const tableRows: CampaignRow[] = useMemo(() => {
+  const tableRows: CampaignRowUI[] = useMemo(() => {
     const arr = [...campaignsWithRec];
     const key = sortBy;
     if (!key) return arr;
@@ -160,14 +169,14 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
           const bv = b.conversions > 0 ? b.spend / b.conversions : Number.POSITIVE_INFINITY;
           return cmpNum(av, bv);
         }
-        case "ctr": return cmpNum(a.ctr, b.ctr);
+        case "ctr": return cmpNum(a?.ctr, b.ctr);
         case "frequency": return cmpNum(a.frequency, b.frequency);
         case "spend": return cmpNum(a.spend, b.spend);
         case "revenue": return cmpNum(a.revenue, b.revenue);
         case "channel": return cmpStr(a.channel, b.channel);
         case "name": return cmpStr(a.name, b.name);
         case "recommendation": {
-          const order = (t?: CampaignRow["recommendation"]) =>
+          const order = (t?: UiRec) =>
             !t ? 9 : t.type === "pause" ? 0 : t.type === "scale" ? 1 : t.type === "creative" ? 2 : 8;
           return cmpNum(order(a.recommendation), order(b.recommendation));
         }
@@ -176,12 +185,12 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     });
 
     return arr;
-  }, [campaignsWithRec, sortBy, sortDir]);
+  }, [campaignsWithRec, sortBy, sortDir]);  
 
   // totals
   const totals = useMemo(() => {
     const base = { spend: 0, revenue: 0, conversions: 0, clicks: 0, ctrSum: 0 };
-    const agg = campaigns.reduce((acc, c) => {
+    const agg = campaigns.reduce((acc, c: CampaignRow) => {
       acc.spend += c.spend; acc.revenue += c.revenue; acc.conversions += c.conversions; acc.clicks += c.clicks; acc.ctrSum += c.ctr;
       return acc;
     }, base);
@@ -199,7 +208,8 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [audit, setAudit] = useState<ActionEntry[]>([]);
   const openCampaign = (row: CampaignRow) => {
-    const data: CampaignModalData = { ...row, raw: row };
+    const dbRec = recMap[row.id];
+    const data: CampaignModalData = { ...row, recommendation: dbRec, raw: row };
     setSelected(data); setModalOpen(true);
   };
 
@@ -216,14 +226,16 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
       campaign: row.name,
       channel: row.channel,
       action: recType,
-      title: row.recommendation?.title ?? "no-op",
+      title: row.recommendation?.reason ?? "no-op",
     };
     setAudit(prev => [entry, ...prev]);
-    setSelected({ ...row, raw: row }); setModalOpen(true);
+    const dbRec = recMap[row.id]; // Rec | undefined
+    setSelected({ ...row, recommendation: dbRec, raw: row });
+    setModalOpen(true);
   };
 
   const alertsRows = useMemo(
-    () => campaignsWithRec.map(c => ({ id: c.id, name: c.name, channel: c.channel, spend: c.spend, recommendation: c.recommendation })),
+    () => campaignsWithRec.map((c: CampaignRowUI) => ({ id: c.id, name: c.name, channel: c.channel, spend: c.spend, recommendation: c.recommendation })),
     [campaignsWithRec]
   );
 
@@ -281,14 +293,8 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
       <DashboardHeader
         readOnly={readOnly}
-        onRefresh={onRefresh}
-        refreshing={refreshing}
         setSettingsOpen={setSettingsOpen}
-        setImportOpen={setImportOpen}
         loadError={loadError}
-        clientId={clientId}
-        clientsList={[]}
-        onExportCsv={onExportCsv}
         shareReadOnlyLink={shareReadOnlyLink}
         onLogout={onLogout}
       />
@@ -325,13 +331,13 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
         <Alerts
           rows={alertsRows}
           onOpen={(id) => {
-            const r = campaigns.find(x => x.id === id);
+            const r = (campaigns ?? []).find((x: CampaignRow) => x.id === id);
             if (r) openCampaign(r);
           }}
         />
 
         <CampaignTable
-          rows={tableRows}
+          rows={tableRows as unknown as CampaignRow[]}
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={handleSort}

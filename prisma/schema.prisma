@@ -32,6 +32,12 @@ model Campaign {
   createdAt  DateTime      @default(now()) @db.Timestamptz
   updatedAt  DateTime      @default(now()) @updatedAt @db.Timestamptz
   recommendations Recommendation[]
+  AdSet AdSet[]
+  CampaignSettingsHistory CampaignSettingsHistory[]
+  CampaignEvent CampaignEvent[]
+  CampaignPlanMonthly CampaignPlanMonthly[]
+  PacingSnapshot PacingSnapshot[]
+  Alert Alert[]
 
   @@unique([clientId, name, channel], name: "clientId_name_channel")
   @@index([clientId, channel])
@@ -90,25 +96,268 @@ model Connection {
   @@unique([clientId, provider], name: "client_provider_unique")
 }
 
+// --- RECOMMENDATIONS (expanded) ---
 model Recommendation {
-  id        String   @id @default(cuid())
+  id           String   @id @default(cuid())
+  clientId     String
+  channel      String      // оставляем string для совместимости на этом этапе
+  level        RecLevel
+  // target: на что нацелено
+  campaignId   String?     // nullable, если уровень ниже кампании
+  adSetId      String?
+  adId         String?
+  creativeId   String?
+  externalId   String?     // ID в источнике, если нужен прямой вызов API
 
-  campaignId  String
-  campaign    Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type         String      // таксономия типов (pause, raise_budget, shift_budget, ...)
+  status       RecStatus   @default(proposed)
 
-  // простая схема без enum'ов, чтобы не упираться в рантайм
-  entityType String            // 'account' | 'campaign' | 'adset' | 'creative'
-  entityId   String?           // nullable для account-уровня
-  actionType String            // 'DecreaseBudgetByPct' | 'PauseCreative' | ...
-  payload    Json?             // параметры действия (например, { "pct": 10 })
-  reason     Json?             // объяснения/флаги (массив строк или объект)
-  priority   Int      @default(0)
-  status     String   @default("proposed") // 'proposed' | 'applied' | 'rejected'
+  reason       String
+  explanation  String?     // расширенное описание "почему"
 
+  expectedKpi      RecKpi
+  expectedDeltaAbs Decimal? @db.Decimal(18,4)
+  expectedDeltaRel Decimal? @db.Decimal(6,4) // 0..1
+  horizon          EffectWindow
+
+  confidence   Decimal  @db.Decimal(3,2) // 0..1
+  urgency      RecUrgency
+  priorityScore Decimal @db.Decimal(8,2)
+
+  validUntil   DateTime? @db.Timestamptz
+  freshnessAt  DateTime? @db.Timestamptz
+
+  actionPayload Json
+  createdBy    RecCreatedBy
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  // relations
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet      AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad         Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
+
+  actions    RecommendationAction[]
+  effects    RecommendationEffect[]
+  conflicts  RecommendationConflict[] @relation("RecConflictsA")
+  conflictedWith RecommendationConflict[] @relation("RecConflictsB")
+
+  @@index([clientId, status])
+  @@index([clientId, priorityScore, createdAt])
+  @@index([channel, level])
+  @@index([campaignId])
+  @@index([validUntil])
+  @@index([freshnessAt])
+}
+
+// --- ENUMS ---    
+// Addressing levels of recommendation
+enum RecLevel { 
+  campaign 
+  adset 
+  ad 
+  creative 
+}
+enum RecStatus { 
+  proposed 
+  applied 
+  dismissed 
+  expired 
+  failed 
+}
+enum RecKpi { 
+  CPA
+  ROAS
+  Spend
+  Conv
+}
+enum RecUrgency {
+  low
+  med
+  high
+}
+enum RecCreatedBy {
+  rule
+  ml
+  human
+}
+enum ActionResult {
+  ok
+  error
+}
+enum EffectWindow {
+  T7
+  T14
+  T30
+}
+enum EffectSource {
+  platform
+  blended
+}
+enum AlertSeverity {
+  info
+  warn
+  critical
+}
+
+// --- NORMALIZED STRUCTURE (light, MVP) ---
+model AdSet {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  externalId String?
+  name       String
+  status     String
   createdAt  DateTime @default(now()) @db.Timestamptz
   updatedAt  DateTime @updatedAt @db.Timestamptz
 
-  @@index([campaignId])
   @@index([campaignId, status])
-  @@index([campaignId, priority, createdAt])
+  Recommendation Recommendation[]
+  Ad Ad[]
+}
+
+model Ad {
+  id       String  @id @default(cuid())
+  adSetId  String
+  adSet    AdSet   @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  externalId String?
+  name     String
+  status   String
+
+  @@index([adSetId, status])
+  Recommendation Recommendation[]
+}
+
+model Creative {
+  id          String  @id @default(cuid())
+  externalId  String?
+  type        String
+  hash        String?
+  landingUrl  String?
+  utm         String?
+  thumbnailRef String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+}
+
+// --- HISTORY & EVENTS ---
+model CampaignSettingsHistory {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  validFrom  DateTime @db.Timestamptz
+  validTo    DateTime? @db.Timestamptz
+  data       Json
+  changedBy  String   // "user:<id>" | "auto" | "source"
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([campaignId, validFrom])
+}
+
+model CampaignEvent {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type       String   // created|budget_changed|status_changed|policy_issue|...
+  ts         DateTime @db.Timestamptz
+  data       Json
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([campaignId, ts])
+}
+
+// --- PLANS & PACING ---
+model CampaignPlanMonthly {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  month        DateTime @db.Date  // 1-е число месяца
+  plannedSpend Decimal  @db.Decimal(18,2)
+  plannedConv  Int?
+  plannedRoas  Decimal? @db.Decimal(8,2)
+
+  @@unique([campaignId, month], name: "campaign_month_unique")
+  @@index([month])
+}
+
+model PacingSnapshot {
+  id                String   @id @default(cuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date              DateTime @db.Date
+  expectedSpendToDate Decimal @db.Decimal(18,2)
+  actualSpendToDate    Decimal @db.Decimal(18,2)
+  delta             Decimal  @db.Decimal(18,2)
+
+  @@unique([campaignId, date], name: "campaign_pacing_date")
+  @@index([date])
+}
+
+// --- ALERTS ---
+model Alert {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  severity   AlertSeverity
+  title      String
+  details    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  resolvedAt DateTime? @db.Timestamptz
+
+  @@index([campaignId, severity, createdAt])
+}
+
+// --- RECOMMENDATION OUTCOMES ---
+model RecommendationAction {
+  id               String   @id @default(cuid())
+  recommendationId String
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  appliedBy        String   // "user:<id>" | "auto"
+  appliedAt        DateTime @db.Timestamptz
+  idempotencyKey   String   @unique
+  requestPayload   Json
+  sourceResponse   Json?
+  result           ActionResult
+  errorMessage     String?
+  rollbackHint     String?
+
+  @@index([recommendationId, appliedAt])
+}
+
+model RecommendationEffect {
+  id               String   @id @default(cuid())
+  recommendationId String
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  window           EffectWindow
+  kpi              RecKpi
+  observedDeltaAbs Decimal  @db.Decimal(18,4)
+  observedDeltaRel Decimal  @db.Decimal(6,4)
+  measuredAt       DateTime @db.Timestamptz
+  source           EffectSource
+
+  @@unique([recommendationId, window])
+  @@index([measuredAt])
+}
+
+model RecommendationConflict {
+  id               String   @id @default(cuid())
+  recommendationId String
+  conflictsWithId  String
+  recommendation   Recommendation @relation("RecConflictsA", fields: [recommendationId], references: [id], onDelete: Cascade)
+  conflictsWith    Recommendation @relation("RecConflictsB", fields: [conflictsWithId], references: [id], onDelete: Cascade)
+  reason           String
+
+  @@index([recommendationId])
+  @@index([conflictsWithId])
+}
+
+// guardrails/cooldowns
+model RecommendationGuard {
+  id                 String   @id @default(cuid())
+  scopeKey           String   @unique   // e.g. "campaign:cmp_123:budget"
+  cooldownUntil      DateTime? @db.Timestamptz
+  dailyDeltaLimitAbs Decimal? @db.Decimal(18,2)
+  dailyDeltaLimitRel Decimal? @db.Decimal(6,4)
+  isAutoAllowed      Boolean  @default(true)
+
+  @@index([cooldownUntil])
 }
