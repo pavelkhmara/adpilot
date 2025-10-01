@@ -3,6 +3,7 @@ import React from "react";
 import { CampaignRow } from "./CampaignRow";
 import { CampaignRow as CampaignRowData} from "../../../lib/types";
 import SkeletonRow from "../SkeletonRow";
+import { UiRec } from "@/features/campaigns/mapRecToUi";
 
 type SortKey =
   | "channel"
@@ -15,6 +16,10 @@ type SortKey =
   | "frequency"
   | "recommendation";
 
+  export type CampaignRowUI = Omit<CampaignRowData, "recommendation"> & {
+    recommendation?: UiRec;
+  };
+
 export default function CampaignTable({
   rows,
   sortBy,
@@ -25,7 +30,7 @@ export default function CampaignTable({
   emptyMessage = "No results found for current filters. Reset filters or modify your search.",
   onGenerateAction,
 }: {
-  rows: CampaignRowData[];
+  rows: CampaignRowUI[];
   sortBy: SortKey | null;
   sortDir: "asc" | "desc";
   onSort: (key: SortKey) => void;

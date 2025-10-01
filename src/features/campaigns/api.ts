@@ -1,11 +1,15 @@
 import type { FetchFilters, CampaignListResponse } from "../../lib/types";
 
-export async function getCampaigns(filters: FetchFilters = {}): Promise<CampaignListResponse> {
+export async function getCampaigns(path: string, { filterParams: filters }: { filterParams?: FetchFilters}  = {}): Promise<CampaignListResponse> {
   const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
-  });
-  const url = `/api/campaigns${params.toString() ? `?${params}` : ""}`;
+  
+  if (filters) {
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+  }
+  
+  const url = `${path}${params.toString() ? `?${params}` : ""}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let msg = "Failed to fetch campaigns";
