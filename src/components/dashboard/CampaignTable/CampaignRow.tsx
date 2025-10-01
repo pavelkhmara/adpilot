@@ -65,7 +65,6 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
           <RecBadge
             type={row.recommendation.type}
             text={
-              // если UiRec → reason || title; если DB Rec → reason
               ("title" in row.recommendation)
                 ? (row.recommendation.reason || row.recommendation.title)
                 : (row.recommendation.reason ?? "")

@@ -143,7 +143,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   return campaigns.map((c: CampaignRow) => {
     const ui: UiRec | undefined = recMap[c.id]
       ? toUiRec(recMap[c.id])                 // DB → UI
-      : (c.recommendation as unknown as UiRec | undefined); // старые мок-данные
+      : (c.recommendation as UiRec | undefined);
     return { ...c, recommendation: ui };
   });
 }, [campaigns, recMap]);
@@ -337,7 +337,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
         />
 
         <CampaignTable
-          rows={tableRows as unknown as CampaignRow[]}
+          rows={tableRows}
           sortBy={sortBy}
           sortDir={sortDir}
           onSort={handleSort}
