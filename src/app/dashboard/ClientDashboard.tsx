@@ -13,7 +13,7 @@ import { useUrlSync } from "../../features/campaigns/hooks/useUrlSync";
 import { useCampaigns } from "../../features/campaigns/hooks/useCampaigns";
 import DashboardHeader from "../../components/dashboard/Header/DashboardHeader";
 import KpiCard from "../../components/dashboard/KpiCard";
-import { CampaignRow, Channel, ClientId } from "../../lib/types";
+import { CampaignRow, Channel, ClientId, Rec } from "../../lib/types";
 import Connections from "../../components/dashboard/Connections";
 import ActionsLog, { type ActionEntry } from "../../components/dashboard/ActionsLog";
 import SettingsModal from "../../components/dashboard/SettingsModal";
@@ -123,7 +123,8 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     () => campaigns.map((c: CampaignRow) => c.id),
     [campaigns]
   );
-  const { map: recMap, refresh: refreshRecs } = useRecommendations(campaignIds, baseFilters.clientId);
+  const { map: recMap, refresh: refreshRecs, mutate: mutateRec } =
+  useRecommendations(campaignIds, baseFilters.clientId);
     
 
   // keep URL in sync
@@ -224,8 +225,40 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     else if (a.type === "scale") pushToast(`Scaled by +${Math.round(a.scaleBy * 100)}% (demo)`);
     else if (a.type === "rotate_creatives") pushToast("Rotate creatives (demo)");
 
-    refreshRecs()
+    if (selected?.id) {
+      mutateRec(selected.id, { status: "applied" });
+    }
+    setSelected(prev => prev ? {
+      ...prev,
+      recommendation: prev.recommendation
+        ? { ...prev.recommendation, status: "applied" }
+        : prev.recommendation
+    } : prev);
+    refreshRecs();
   };
+
+  async function onDismiss(rec: Rec | undefined, reason?: string) {
+  const res = await fetch("/api/recommendations/dismiss", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: rec?.id, by: `user:\${userId}`, reason }),
+  });
+  const json = await res.json();
+  if (!res.ok || !json.ok) {
+    return;
+  }
+
+  if (selected?.id) {
+    mutateRec(selected.id, { status: "dismissed" });
+  }
+  setSelected(prev => prev ? {
+    ...prev,
+    recommendation: prev.recommendation
+      ? { ...prev.recommendation, status: "dismissed" }
+      : prev.recommendation
+  } : prev);
+  refreshRecs();
+}
 
   const onGenerateAction = (row: CampaignRow) => {
     const recType = row.recommendation?.type ?? "none";
@@ -357,7 +390,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
         <ActionsLog entries={audit} onClear={() => setAudit([])} />
       </main>
 
-      <CampaignModal open={modalOpen} data={selected} onClose={() => setModalOpen(false)} onAction={handleAction} />
+      <CampaignModal open={modalOpen} data={selected} onClose={() => setModalOpen(false)} onAction={handleAction} onDismiss={onDismiss} />
 
       <ImportCsvDialog
         open={importOpen}
