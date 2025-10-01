@@ -45,7 +45,7 @@ export type CampaignModalData = {
 
 export type CampaignAction =
   | { type: "pause"; id: string }
-  | { type: "scale"; id: string; by: number } // by = 0.1 -> +10%
+  | { type: "scale"; id: string; scaleBy: number } // by = 0.1 -> +10%
   | { type: "rotate_creatives"; id: string };
 
 
@@ -170,7 +170,7 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
             )}
           </div> */}
           <div className="text-sm">
-            <div className="text-gray-500 mb-1">Recommendation</div>
+            <div className="text-gray-500 mb-1">Recommendation {rec?.status && <RecBadge type={rec.type} text={rec.status} />}</div>
             {rec ? (
               <div className="space-y-1">
                 <RecommendationPill rec={rec} />
@@ -274,7 +274,7 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
             <div className="flex flex-wrap items-center gap-2">
               <button
                 className="px-3 py-1.5 rounded-xl bg-red-200 border border-red-300 hover:bg-red-300"
-                onClick={() => onAction({ type: "pause", id: data.id })}
+                onClick={() => onAction({ type: "pause", id: data.recommendation ? data.recommendation.id : '' })}
                 title="Pause campaign"
               >
                 Pause
@@ -292,7 +292,7 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
                 </select>
                 <button
                   className="px-3 py-1.5 rounded-xl bg-green-200 border border-green-300 hover:bg-green-300"
-                  onClick={() => onAction({ type: "scale", id: data.id, by: scaleBy })}
+                  onClick={() => onAction({ type: "scale", id: data.recommendation ? data.recommendation.id : '', scaleBy: scaleBy })}
                   title="Increase budget"
                 >
                   Scale
@@ -301,7 +301,7 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
 
               <button
                 className="px-3 py-1.5 rounded-xl bg-blue-200 border border-blue-300 hover:bg-blue-300"
-                onClick={() => onAction({ type: "rotate_creatives", id: data.id })}
+                onClick={() => onAction({ type: "rotate_creatives", id: data.recommendation ? data.recommendation.id : '' })}
                 title="Refresh creatives"
               >
                 Rotate creatives

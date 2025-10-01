@@ -62,14 +62,19 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
 
       <td className="text-left p-3 py-1.5">
         {row.recommendation ? (
-          <RecBadge
-            type={row.recommendation.type}
-            text={
-              ("title" in row.recommendation)
-                ? (row.recommendation.reason || row.recommendation.title)
-                : (row.recommendation.reason ?? "")
-            }
-          />
+          <div className="flex items-center gap-2">
+            <RecBadge
+              type={row.recommendation.type}
+              text={
+                ("title" in row.recommendation)
+                  ? (row.recommendation.reason || row.recommendation.title)
+                  : (row.recommendation.reason ?? "")
+              }
+            />
+            {row.recommendation.status && (
+              <RecBadge type="status" text={row.recommendation.status} />
+            )}
+          </div>
         ) : "—"}
 
       </td>

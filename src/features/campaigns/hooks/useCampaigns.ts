@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { getCampaigns } from "../api";
 import type { CampaignRow, CampaignStatus, Channel, FetchFilters } from "../../../lib/types";
 import { fmt, addDays, isValidYmd } from "../../../lib/dates";
 import type { CampaignListResponse, CampaignListItem, KpiChip } from "../../../lib/contracts/campaigns";
 
-type RangeKey = "today" | "d7" | "d30";
+// type RangeKey = "today" | "d7" | "d30";
 
 // 1) choose KPI-chip by rule: d7 -> today -> d30
 const pickRange = (c: CampaignListItem): KpiChip | undefined =>

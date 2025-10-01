@@ -123,7 +123,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     () => campaigns.map((c: CampaignRow) => c.id),
     [campaigns]
   );
-  const { map: recMap } = useRecommendations(campaignIds);
+  const { map: recMap, refresh: refreshRecs } = useRecommendations(campaignIds, baseFilters.clientId);
     
 
   // keep URL in sync
@@ -213,10 +213,18 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
     setSelected(data); setModalOpen(true);
   };
 
-  const handleAction = (a: CampaignAction) => {
+  const handleAction = async (a: CampaignAction) => {
+    await fetch("/api/recommendations/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...a, id: a.id, by: `user: \${userId}` }),
+    });
+
     if (a.type === "pause") pushToast("Paused (demo)");
-    else if (a.type === "scale") pushToast(`Scaled by +${Math.round(a.by * 100)}% (demo)`);
+    else if (a.type === "scale") pushToast(`Scaled by +${Math.round(a.scaleBy * 100)}% (demo)`);
     else if (a.type === "rotate_creatives") pushToast("Rotate creatives (demo)");
+
+    refreshRecs()
   };
 
   const onGenerateAction = (row: CampaignRow) => {
