@@ -74,6 +74,9 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
             {row.recommendation.status && (
               <RecBadge type="status" text={row.recommendation.status} />
             )}
+            {row.recommendation?.validUntil && new Date(row.recommendation.validUntil) > new Date() && (
+              <RecBadge type="status" text={`snoozed till ${new Date(row.recommendation.validUntil).toLocaleDateString()}`} />
+            )}
           </div>
         ) : "—"}
 

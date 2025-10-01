@@ -93,8 +93,9 @@ type Props = {
   onClose: () => void; 
   onAction: (a: CampaignAction) => void;
   onDismiss: (rec: Rec, reason?: string) => void;
+  onSnooze: (rec: Rec, untilISO: string, note?: string) => void;
 }
-export default function CampaignModal({ open, data, onClose, onAction, onDismiss }: Props) {
+export default function CampaignModal({ open, data, onClose, onAction, onDismiss, onSnooze }: Props) {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
   const [scaleBy, setScaleBy] = useState(0.15); // default +15%

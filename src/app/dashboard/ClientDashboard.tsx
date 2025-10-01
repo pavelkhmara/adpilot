@@ -140,14 +140,14 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   });
 
   const campaignsWithRec: CampaignRowUI[] = useMemo(() => {
-  if (!campaigns || campaigns.length === 0) return [];
-  return campaigns.map((c: CampaignRow) => {
-    const ui: UiRec | undefined = recMap[c.id]
-      ? toUiRec(recMap[c.id])                 // DB → UI
-      : (c.recommendation as UiRec | undefined);
-    return { ...c, recommendation: ui };
-  });
-}, [campaigns, recMap]);
+    if (!campaigns || campaigns.length === 0) return [];
+    return campaigns.map((c: CampaignRow) => {
+      const ui: UiRec | undefined = recMap[c.id]
+        ? toUiRec(recMap[c.id])                 // DB → UI
+        : (c.recommendation as UiRec | undefined);
+      return { ...c, recommendation: ui };
+    });
+  }, [campaigns, recMap]);
 
   // table sorting
   const tableRows: CampaignRowUI[] = useMemo(() => {
@@ -238,27 +238,53 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   };
 
   async function onDismiss(rec: Rec | undefined, reason?: string) {
-  const res = await fetch("/api/recommendations/dismiss", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id: rec?.id, by: `user:\${userId}`, reason }),
-  });
-  const json = await res.json();
-  if (!res.ok || !json.ok) {
-    return;
+    const res = await fetch("/api/recommendations/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rec?.id, by: `user:\${userId}`, reason }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      pushToast("Dismiss failed");
+      return ;
+    }
+
+    if (selected?.id) {
+      mutateRec(selected.id, { status: "dismissed" });
+    }
+    setSelected(prev => prev ? {
+      ...prev,
+      recommendation: prev.recommendation
+        ? { ...prev.recommendation, status: "dismissed" }
+        : prev.recommendation
+    } : prev);
+    refreshRecs();
   }
 
-  if (selected?.id) {
-    mutateRec(selected.id, { status: "dismissed" });
+  async function onSnooze(rec: Rec, untilISO: string, note?: string) {
+    const res = await fetch("/api/recommendations/snooze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rec.id, by: `user:\${userId}`, until: untilISO, note }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      pushToast("Snooze failed");
+      return;
+    }
+
+    setSelected(prev => prev ? {
+      ...prev,
+      recommendation: prev.recommendation
+        ? { ...prev.recommendation, validUntil: untilISO, status: "proposed" }
+        : prev.recommendation
+    } : prev);
+
+    if (selected?.id) mutateRec(selected.id, { validUntil: new Date(untilISO).toISOString(), status: "proposed" });
+
+    refreshRecs();
   }
-  setSelected(prev => prev ? {
-    ...prev,
-    recommendation: prev.recommendation
-      ? { ...prev.recommendation, status: "dismissed" }
-      : prev.recommendation
-  } : prev);
-  refreshRecs();
-}
+
 
   const onGenerateAction = (row: CampaignRow) => {
     const recType = row.recommendation?.type ?? "none";
@@ -390,7 +416,7 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
         <ActionsLog entries={audit} onClear={() => setAudit([])} />
       </main>
 
-      <CampaignModal open={modalOpen} data={selected} onClose={() => setModalOpen(false)} onAction={handleAction} onDismiss={onDismiss} />
+      <CampaignModal open={modalOpen} data={selected} onClose={() => setModalOpen(false)} onAction={handleAction} onDismiss={onDismiss} onSnooze={onSnooze} />
 
       <ImportCsvDialog
         open={importOpen}
