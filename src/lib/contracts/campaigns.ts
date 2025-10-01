@@ -11,11 +11,18 @@ export const KpiChip = z.object({
 });
 export type KpiChip = z.infer<typeof KpiChip>;
 
+export const Plan = z.object({
+  month: z.string(), 
+  amount: z.number(),
+  currency: z.string(),
+});
+export type Plan = z.infer<typeof Plan>;
+
 export const Pacing = z.object({
   expectedToDate: z.number(),
   actualToDate: z.number(),
   delta: z.number(), 
-  planMonth: z.string().optional().nullable(),
+  plan: Plan.optional().nullable(),
 });
 export type Pacing = z.infer<typeof Pacing>;
 

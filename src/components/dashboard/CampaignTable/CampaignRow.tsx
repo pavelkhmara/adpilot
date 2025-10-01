@@ -49,14 +49,18 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
             </button>
           </div>
           <div className="flex">
-            {/* {row.pacing ? ( */}
+            {row.pacing ? (
               <span className="inline-flex items-center justify-end gap-1">
                 <span className={`px-2 py-0.5 min-w-32 rounded-full text-xs bg-gray-100 text-gray-600`}>
-                  {`Plan: ${row.pacing ? row.pacing.expectedToDate.toFixed(0) : '-'} | Actual: ${row.pacing ? row.pacing.actualToDate.toFixed(0) : '-'}`}
+                  {[
+                    `Expected: ${row.pacing.expectedToDate.toFixed(0)}`,
+                    `Actual: ${row.pacing.actualToDate.toFixed(0)}`,
+                    row.pacing.plan ? `Plan ${row.pacing.plan.month}: ${row.pacing.plan.amount.toFixed(0)} ${row.pacing.plan.currency}` : ""
+                  ].filter(Boolean).join(" | ")}
                 </span>
                 <span className={`text-xs min-w-fit ${(row.pacing && row?.pacing.delta >= 0) ? "text-emerald-600" : "text-red-600"}`}>{pacingTrend}</span>
               </span>
-            {/* ) : null} */}
+            ) : null}
           </div>
         </div>
       </td>

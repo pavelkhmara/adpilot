@@ -1,4 +1,5 @@
 import { UiRec } from "@/features/campaigns/mapRecToUi";
+import { Plan } from "./types";
 export * from "../lib/contracts";
 
 export type Channel = "Google Ads" | "Meta Ads" | string;
@@ -75,7 +76,7 @@ export type CampaignRow = {
   ctrTrend?: Trend;
   recommendation?: Recommendation | UiRec;
   notes?: string[];
-  pacing?: { expectedToDate: number; actualToDate: number; delta: number; planMonth?: string | null };
+  pacing?: { expectedToDate: number; actualToDate: number; delta: number; plan?: Plan | null };
 };
 
 export type FetchFilters = {
