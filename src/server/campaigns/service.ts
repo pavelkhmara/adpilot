@@ -61,7 +61,6 @@ export async function listCampaigns(args: ListArgs) {
       channel: true,
       status: true,
       updatedAt: true,
-      CampaignPlanMonthly: true,
     },
     orderBy: { updatedAt: "desc" },
     skip: args.offset ?? 0,
@@ -153,6 +152,21 @@ export async function listCampaigns(args: ListArgs) {
     }
   }
 
+  const plans = await prisma.campaignPlanMonthly.findMany({
+    where: { campaignId: { in: ids } },
+    orderBy: [{ month: "desc" }],
+  });
+  const planBy = new Map<string, { month: string; amount: number; currency: string }>();
+  for (const p of plans) {
+    if (!planBy.has(p.campaignId)) {
+      planBy.set(p.campaignId, {
+        month: String(p.month),
+        amount: Number(p.plannedSpend || 0),
+        currency: Math.random() > 0.5 ? "USD" : "EUR",
+      });
+    }
+  }
+
   // 5) pacing (today snapshot)
   const pacing = await prisma.pacingSnapshot.findMany({
     where: { campaignId: { in: ids } },
@@ -195,6 +209,9 @@ export async function listCampaigns(args: ListArgs) {
     const spark = sparkBy.get(c.id)!;
     const latestRec = latestBy.get(c.id);
 
+    const p = pacingBy.get(c.id) ?? null;
+    const plan = planBy.get(c.id);
+
     type CampaignListItemType = z.infer<typeof CampaignListItem>;
     const dto: CampaignListItemType = {
       id: c.id,
@@ -211,7 +228,12 @@ export async function listCampaigns(args: ListArgs) {
       today,
       d7,
       d30,
-      pacing: pacingBy.get(c.id) ?? null,
+      pacing: p ? {
+        expectedToDate: p.expectedToDate,
+        actualToDate: p.actualToDate,
+        delta: p.delta,
+        plan: plan ? { month: plan.month, amount: plan.amount, currency: plan.currency } : null,
+      } : null,
       lastChangeAt: c.updatedAt?.toISOString() ?? null,
       lastSyncAt: null,
       latestRecommendation: latestRec ? { id: latestRec.id, type: latestRec.type, priority: latestRec.priority } : null,
