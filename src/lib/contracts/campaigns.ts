@@ -11,6 +11,14 @@ export const KpiChip = z.object({
 });
 export type KpiChip = z.infer<typeof KpiChip>;
 
+export const Pacing = z.object({
+  expectedToDate: z.number(),
+  actualToDate: z.number(),
+  delta: z.number(), 
+  planMonth: z.string().optional().nullable(),
+});
+export type Pacing = z.infer<typeof Pacing>;
+
 export const CampaignListItem = z.object({
   id: z.string(), name: z.string(),
   channel: z.string(), status: z.string(),
@@ -28,12 +36,7 @@ export const CampaignListItem = z.object({
   today: KpiChip.optional(),
   d7: KpiChip.optional(),
   d30: KpiChip.optional(),
-  pacing: z.object({
-    planMonth: z.string().optional(),      // "2025-09-01"
-    expectedToDate: z.number(),
-    actualToDate: z.number(),
-    delta: z.number(),
-  }).nullable().optional(),
+  pacing: Pacing.nullable().optional(),
   lastChangeAt: z.string().nullable().optional(),
   lastSyncAt: z.string().nullable().optional(),
   latestRecommendation: z.object({
@@ -72,3 +75,5 @@ export const ListQuery = z.object({
   metricsSource: z.enum(["platform","blended","auto"]).optional(),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
+
+

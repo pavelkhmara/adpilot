@@ -75,6 +75,7 @@ export type CampaignRow = {
   ctrTrend?: Trend;
   recommendation?: Recommendation | UiRec;
   notes?: string[];
+  pacing?: { expectedToDate: number; actualToDate: number; delta: number; planMonth?: string | null };
 };
 
 export type FetchFilters = {

@@ -1,4 +1,5 @@
 "use client";
+import StatusBadge from "@/components/UI/StatusBadge";
 import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
 import React from "react";
 
@@ -29,18 +30,35 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
   const roas = row.spend > 0 ? row.revenue / row.spend : 0;
   const cpa = row.conversions > 0 ? row.spend / row.conversions : 0;
 
+  const pacingDelta = row.pacing && row.pacing.delta ? row?.pacing.delta.toFixed(0) : 0;
+  const pacingTrend = (row.pacing && row.pacing.delta >= 0) ? `▲ +${pacingDelta}` : `▼ ${pacingDelta}`;
+
   return (
     <tr className="border-t border-app hover:bg-[rgb(var(--muted))]/50">
       <td className="text-left p-3 py-1.5 whitespace-nowrap">{row.channel}</td>
 
       <td className="text-left p-3 py-1.5">
-        <button
-          className="font-medium hover:underline"
-          onClick={() => onOpen(row)}
-          title="Open campaign details"
-        >
-          {row.name}
-        </button>
+        <div className="flex flex-col">
+          <div className="flex">
+            <button
+              className="font-medium hover:underline"
+              onClick={() => onOpen(row)}
+              title="Open campaign details"
+            >
+              {row.name}
+            </button>
+          </div>
+          <div className="flex">
+            {/* {row.pacing ? ( */}
+              <span className="inline-flex items-center justify-end gap-1">
+                <span className={`px-2 py-0.5 min-w-32 rounded-full text-xs bg-gray-100 text-gray-600`}>
+                  {`Plan: ${row.pacing ? row.pacing.expectedToDate.toFixed(0) : '-'} | Actual: ${row.pacing ? row.pacing.actualToDate.toFixed(0) : '-'}`}
+                </span>
+                <span className={`text-xs min-w-fit ${(row.pacing && row?.pacing.delta >= 0) ? "text-emerald-600" : "text-red-600"}`}>{pacingTrend}</span>
+              </span>
+            {/* ) : null} */}
+          </div>
+        </div>
       </td>
 
       <td className="text-right p-3 py-1.5 tabular-nums">{row.spend.toFixed(2)}</td>
@@ -67,7 +85,7 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
               type={row.recommendation.type}
               text={
                 ("title" in row.recommendation)
-                  ? (row.recommendation.reason || row.recommendation.title)
+                  ? row.recommendation.type 
                   : (row.recommendation.reason ?? "")
               }
             />

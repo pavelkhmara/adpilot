@@ -44,6 +44,7 @@ const toRow = (c: CampaignListItem): CampaignRow => {
 
     notes: undefined,
     recommendation: undefined,
+    pacing: c.pacing ?? undefined,
   };
 };
 

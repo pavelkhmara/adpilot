@@ -45,7 +45,7 @@ export async function listCampaigns(args: ListArgs) {
   const { from: d30from, toExcl: d30to } = rangeLastNDays(30);
   const { from: tFrom, toExcl: tTo } = rangeLastNDays(1);
 
-  // 1) базовый список кампаний (легковесный select)
+  // 1) campaigns basic list (light select)
   const campaigns = await prisma.campaign.findMany({
     where: {
       clientId: args.clientId,
@@ -60,7 +60,8 @@ export async function listCampaigns(args: ListArgs) {
       name: true,
       channel: true,
       status: true,
-      updatedAt: true, 
+      updatedAt: true,
+      CampaignPlanMonthly: true,
     },
     orderBy: { updatedAt: "desc" },
     skip: args.offset ?? 0,
@@ -72,7 +73,7 @@ export async function listCampaigns(args: ListArgs) {
     return { items: [] as typeof items, generatedAt: new Date().toISOString() };
   }
 
-  // 2) агрегаты KPI today / 7 / 30
+  // 2) aggregators KPI today / 7 / 30
   // MetricDaily: { date: Date (UTC day), campaignId, impressions, clicks, spend, conversions, revenue }
   const md = await prisma.metricDaily.groupBy({
     by: ["campaignId"],
@@ -100,7 +101,7 @@ export async function listCampaigns(args: ListArgs) {
     md30.map(r => [r.campaignId, r._sum])
   );
 
-  // 3) спарклайны на 7 дней (расход/конв/roas по дням)
+  // 3) 7 days sparkline (spend/conv/roas by day)
   const sparkRaw = await prisma.metricDaily.findMany({
     where: { campaignId: { in: ids }, date: { gte: d7from, lt: d7to } },
     select: { campaignId: true, date: true, spend: true, conversions: true, revenue: true },
@@ -110,7 +111,7 @@ export async function listCampaigns(args: ListArgs) {
   for (const c of campaigns) {
     sparkBy.set(c.id, { spend: [], conv: [], roas: [] });
   }
-  // подготовим календарь последних 7 дней для выравнивания пропусков
+  // prepare calendar of last 7 days to flat spaces
   const days: string[] = [];
   for (let i = 0; i < 7; i++) days.push(addDays(d7from, i).toISOString().slice(0, 10));
 
@@ -132,14 +133,14 @@ export async function listCampaigns(args: ListArgs) {
     }
   }
 
-  // 4) последняя (наиболее приоритетная) рекомендация на кампанию — компактно
+  // 4) last (the most priority) recommendation of campaign
   const latest = await prisma.recommendation.findMany({
     where: { campaignId: { in: ids }, status: { in: ["proposed", "applied"] } },
     select: { id: true, type: true, priorityScore: true, campaignId: true },
     orderBy: [{ priorityScore: "desc" }, { createdAt: "desc" }],
   });
 
-  // берём первую на кампанию
+  // get first campaign
   const latestBy = new Map<string, { id: string; type: string; priority: number }>();
   for (const r of latest) {
     if (!r.campaignId) continue;
@@ -152,11 +153,11 @@ export async function listCampaigns(args: ListArgs) {
     }
   }
 
-  // 5) пейсинг (снимок на сегодня)
+  // 5) pacing (today snapshot)
   const pacing = await prisma.pacingSnapshot.findMany({
     where: { campaignId: { in: ids } },
     orderBy: [{ date: "desc" }],
-    take: ids.length * 1, // простая эвристика
+    take: ids.length * 1,
   });
   const pacingBy = new Map<string, { expectedToDate: number; actualToDate: number; delta: number; planMonth?: string }>();
   for (const p of pacing) {
@@ -164,11 +165,11 @@ export async function listCampaigns(args: ListArgs) {
       expectedToDate: Number(p.expectedSpendToDate || 0),
       actualToDate: Number(p.actualSpendToDate || 0),
       delta: Number(p.delta || 0),
-      planMonth: undefined,
+      planMonth: String(p.date) ?? undefined,
     });
   }
 
-  // 6) сбор финального списка
+  // 6) final list build
   const items = campaigns.map((c) => {
     const agg = (s?: MetricSum) => {
       if (!s) return undefined;
