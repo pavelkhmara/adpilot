@@ -87,6 +87,7 @@ export async function GET(req: Request) {
   const items: Partial<Rec>[] = [...bestByCampaign.values()].map(r => ({
     id: r.id,
     campaignId: r.campaignId,
+    status: r.status,
     type: r.type,
     reason: r.reason,
     explanation: r.explanation,

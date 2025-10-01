@@ -1,6 +1,7 @@
 "use client";
 import { Channel } from "@/lib/types";
 import React, { useMemo } from "react";
+import RecBadge from "../UI/RecBadge";
 
 export type RecType = "pause" | "scale" | "creative" | "none";
 export type RowWithRec = {
@@ -8,7 +9,7 @@ export type RowWithRec = {
   name: string;
   channel: Channel;
   spend: number;
-  recommendation?: { type: RecType; title: string; reason?: string };
+  recommendation?: { type: RecType; title: string; reason?: string; status?: string };
 };
 
 export default function Alerts({
@@ -39,13 +40,14 @@ export default function Alerts({
       <ul className="text-sm space-y-2">
         {alerts.map((a) => (
           <li key={a.id} className="flex items-start gap-2">
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              a.recommendation!.type === "pause" ? "bg-red-100 text-red-700" :
-              a.recommendation!.type === "scale" ? "bg-green-100 text-green-700" :
-              "bg-amber-100 text-amber-700"
-            }`}>
-              {a.recommendation!.title}
-            </span>
+            {a.recommendation && (
+              <div className="flex items-center gap-2">
+                <RecBadge type={a.recommendation.type} text={a.recommendation.title} />
+                {a.recommendation?.status && (
+                  <RecBadge type="status" text={a.recommendation?.status} />
+                )}
+              </div>
+            )}
             <button
               className="text-left text-gray-700 hover:underline"
               onClick={() => onOpen(a.id)}
@@ -54,6 +56,7 @@ export default function Alerts({
               <span className="text-gray-500">{a.channel}</span> — <strong>{a.name}</strong>
               {a.recommendation?.reason ? <> · {a.recommendation!.reason}</> : null}
             </button>
+            
           </li>
         ))}
       </ul>

@@ -1,25 +1,30 @@
-import { Rec } from "@/lib/contracts";
-import useSWR from "swr";
+import { Rec, RecListResponse } from "@/lib/contracts";
+import { useEffect, useState } from "react";
 
-type ByCampaign = Record<string, Rec | undefined>;
+// type ByCampaign = Record<string, Rec | undefined>;
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+export function useRecommendations(campaignIds: string[], clientId?: string) {
+  const [map, setMap] = useState<Record<string, Rec | undefined>>({});
+  const [version, setVersion] = useState(0);
 
-export function useRecommendations(campaignIds: string[]) {
-  const key = campaignIds.length
-    ? `/api/recommendations/by-campaign?ids=${encodeURIComponent(campaignIds.join(","))}`
-    : null;
+  const refresh = () => setVersion(v => v + 1);
 
-  const { data, error, isLoading, mutate } = useSWR(key, fetcher, { revalidateOnFocus: false });
-  
-  
-  
-  const map: ByCampaign = {};
-  if (data?.items) {
-    for (const it of data.items) {
-      map[it.campaignId ? it.campaignId : it.id] = it;
-    }
-  }
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const qs = clientId ? `?clientId=${clientId}` : "";
+      const res = await fetch(`/api/recommendations${qs}`);
+      const data: RecListResponse = await res.json();
+      const by: Record<string, Rec | undefined> = {};
 
-  return { map, loading: !!key && (isLoading && !data), error, refresh: mutate };
+      for (const r of data.items) {
+        const id = r.target.campaignId ?? "";
+        if (id) by[id] = r;
+      }
+      if (alive) setMap(by);
+    })();
+    return () => { alive = false; };
+  }, [clientId, campaignIds.join(","), version]);
+
+  return { map, refresh };
 }
