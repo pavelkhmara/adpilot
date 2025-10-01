@@ -26,5 +26,13 @@ export function useRecommendations(campaignIds: string[], clientId?: string) {
     return () => { alive = false; };
   }, [clientId, campaignIds.join(","), version]);
 
-  return { map, refresh };
+  function mutate(campaignId: string, patch: Partial<Rec>) {
+  setMap(prev => {
+    const cur = prev[campaignId];
+    if (!cur) return prev;
+    return { ...prev, [campaignId]: { ...cur, ...patch } };
+  });
+}
+
+  return { map, refresh, mutate };
 }

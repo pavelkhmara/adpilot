@@ -22,7 +22,7 @@ export default function Alerts({
   max?: number;
 }) {
   const alerts = useMemo(() => {
-    const actionable = rows.filter(r => r.recommendation && r.recommendation.type !== "none");
+    const actionable = rows.filter(r => r.recommendation && (r.recommendation.type !== "none" || r.recommendation?.status !== "dismissed"));
     const weight = (t: RecType) => (t === "pause" ? 0 : t === "scale" ? 1 : t === "creative" ? 2 : 9);
     actionable.sort((a, b) => {
       const ta = a.recommendation!.type, tb = b.recommendation!.type;

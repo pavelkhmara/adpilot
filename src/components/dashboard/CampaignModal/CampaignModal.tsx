@@ -24,22 +24,15 @@ export type CampaignModalData = {
   revenue: number;
   frequency: number; // avg
   ctr: number;       // avg (0..1)
-  // тренды
+
   roasTrend?: Trend;
   cpaTrend?: Trend;
   ctrTrend?: Trend;
-  // рекомендации
+
   recommendation?: Rec;
-  // {
-  //   type: RecType;
-  //   title: string;
-  //   reason: string;
-  //   action?: { kind: "increase_budget"; by?: number } | { kind: "pause" } | { kind: "rotate_creatives" } | null;
-  //   risk?: string;
-  // };
-  // опционально подробности
+
   notes?: string[];
-  raw?: unknown;     // сырые данные (для JSON секции)
+  raw?: unknown;
   series?: Array<{ date: string; spend: number; revenue: number; conversions: number; ctr?: number }>;
 };
 
@@ -74,7 +67,7 @@ const generateMockSeries = (days: number = 7) => {
     
     const spend = Math.random() * 3000 + 2000; // 2000-5000
     const revenue = spend * (Math.random() * 2 + 2); // ROAS 2-4
-    const conversions = Math.floor(spend / 15 + Math.random() * 50); // примерная логика
+    const conversions = Math.floor(spend / 15 + Math.random() * 50);
     
     series.push({
       date: date.toISOString().split('T')[0], // YYYY-MM-DD
@@ -94,8 +87,14 @@ const generateMockSeries = (days: number = 7) => {
 const mockData = {
   series: generateMockSeries(10)
 };
-
-export default function CampaignModal({ open, data, onClose, onAction }: { open: boolean; data: CampaignModalData | null; onClose: () => void; onAction: (a: CampaignAction) => void; }) {
+type Props = {
+  open: boolean; 
+  data: CampaignModalData | null; 
+  onClose: () => void; 
+  onAction: (a: CampaignAction) => void;
+  onDismiss: (rec: Rec, reason?: string) => void;
+}
+export default function CampaignModal({ open, data, onClose, onAction, onDismiss }: Props) {
   const [jsonOpen, setJsonOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
   const [scaleBy, setScaleBy] = useState(0.15); // default +15%
@@ -269,47 +268,52 @@ export default function CampaignModal({ open, data, onClose, onAction }: { open:
         {/* footer */}
         <div className="px-5 py-3 border-t border-gray-400 border-app flex items-center justify-between gap-2">
           {/* Actions */}
-          <section className="pb-2">
-            <div className="text-xs font-medium mb-1">Actions</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="px-3 py-1.5 rounded-xl bg-red-200 border border-red-300 hover:bg-red-300"
-                onClick={() => onAction({ type: "pause", id: data.recommendation ? data.recommendation.id : '' })}
-                title="Pause campaign"
-              >
-                Pause
-              </button>
-
-              <div className="flex items-center gap-2">
-                <select
-                  className="px-2 py-2.5 rounded-xl border border-green-300 bg-app text-sm"
-                  value={scaleBy}
-                  onChange={(e) => setScaleBy(Number(e.target.value))}
-                >
-                  {[0.1, 0.15, 0.2, 0.3, 0.5].map(v => (
-                    <option key={v} value={v}>+{Math.round(v * 100)}%</option>
-                  ))}
-                </select>
+          {data.recommendation && (
+            <section className="pb-2">
+              <div className="text-xs font-medium mb-1">Actions</div>
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  className="px-3 py-1.5 rounded-xl bg-green-200 border border-green-300 hover:bg-green-300"
-                  onClick={() => onAction({ type: "scale", id: data.recommendation ? data.recommendation.id : '', scaleBy: scaleBy })}
-                  title="Increase budget"
+                  className="px-3 py-1.5 rounded-xl bg-red-200 border border-red-300 hover:bg-red-300"
+                  onClick={() => onAction({ type: "pause", id: data.recommendation ? data.recommendation.id : '' })}
+                  title="Pause campaign"
                 >
-                  Scale
+                  Pause
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    className="px-2 py-2.5 rounded-xl border border-green-300 bg-app text-sm"
+                    value={scaleBy}
+                    onChange={(e) => setScaleBy(Number(e.target.value))}
+                  >
+                    {[0.1, 0.15, 0.2, 0.3, 0.5].map(v => (
+                      <option key={v} value={v}>+{Math.round(v * 100)}%</option>
+                    ))}
+                  </select>
+                  <button
+                    className="px-3 py-1.5 rounded-xl bg-green-200 border border-green-300 hover:bg-green-300"
+                    onClick={() => onAction({ type: "scale", id: data.recommendation ? data.recommendation.id : '', scaleBy: scaleBy })}
+                    title="Increase budget"
+                  >
+                    Scale
+                  </button>
+                </div>
+
+                <button
+                  className="px-3 py-1.5 rounded-xl bg-blue-200 border border-blue-300 hover:bg-blue-300"
+                  onClick={() => onAction({ type: "rotate_creatives", id: data.recommendation ? data.recommendation.id : '' })}
+                  title="Refresh creatives"
+                >
+                  Rotate creatives
                 </button>
               </div>
 
-              <button
-                className="px-3 py-1.5 rounded-xl bg-blue-200 border border-blue-300 hover:bg-blue-300"
-                onClick={() => onAction({ type: "rotate_creatives", id: data.recommendation ? data.recommendation.id : '' })}
-                title="Refresh creatives"
-              >
-                Rotate creatives
-              </button>
-            </div>
-
-            
-          </section>
+              
+            </section>
+          )}
+          {rec?.status === 'applied' && data && data?.recommendation && (
+            <button className="px-3 py-2 rounded-xl bg-white border border-gray-300 hover:bg-gray-200" onClick={() => onDismiss(data?.recommendation as Rec)}>Dismiss</button>
+          )}
           <button className="px-3 py-2 rounded-xl bg-white border border-gray-300 hover:bg-gray-200" onClick={onClose}>Close</button>
         </div>
       </div>
