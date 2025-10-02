@@ -79,7 +79,10 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
                   <div className="text-xs opacity-60">Acct: {it.externalAccountRef}</div>
                 )}
               </div>
-              <div className="flex gap-2">
+              
+              <div className='flex flex-col'>
+                
+              <div className="flex justify-end gap-2">
                 {!isConnected ? (
                     <button
                     onClick={() => openModal(slug)}
@@ -99,6 +102,32 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
                     </>
                 )}
                 </div>
+
+                <div className='flex gap-2'>
+                  <button onClick={async () => {
+                    await fetch(`/api/simulate/seed?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
+                    await load(); // перезагрузим подключения
+                  }} className="px-3 py-1.5 rounded-lg border">Seed demo data</button>
+
+                  <button onClick={async () => {
+                    await fetch(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
+                  }} className="px-3 py-1.5 rounded-lg border">Tick ×1</button>
+
+                  <label className="text-sm flex items-center gap-2">
+                    <input type="checkbox" onChange={(e) => {
+                      if (e.target.checked) {
+                        const id = setInterval(() => fetch(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' }), 20000);
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (window as any).__simTickId = id;
+                      } else {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        clearInterval((window as any).__simTickId);
+                      }
+                    }} />
+                    Auto-tick
+                  </label>
+                </div>
+              </div>
 
             </div>
           );
