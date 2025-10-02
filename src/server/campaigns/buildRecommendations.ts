@@ -1,4 +1,4 @@
-import { Channel } from "@/lib/types";
+import { Channel } from "../../lib/types";
 
 export type UiRec = { type: "pause" | "scale" | "creative"; title: string; reason?: string };
 

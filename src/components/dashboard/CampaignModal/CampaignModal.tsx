@@ -8,8 +8,8 @@ import { fmtInt, fmtMoney, safeStringify } from "../../../lib/utils";
 import Collapsible from "../../../components/UI/Collapsible";
 import Badge from "../../../components/UI/Badge";
 import { BarChart, Bar, Rectangle, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
-import { toUiRec, UiRec } from "@/features/campaigns/mapRecToUi";
+import { useRecommendations } from "../../../features/campaigns/hooks/fetchRecommendations";
+import { toUiRec, UiRec } from "../../../features/campaigns/mapRecToUi";
 
 export type CampaignModalData = {
   id: string;

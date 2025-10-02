@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/db";
-import { CampaignListItem } from "@/lib/contracts/campaigns";
+import { prisma } from "../../lib/db";
+import { CampaignListItem } from "../../lib/contracts/campaigns";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 

@@ -7,14 +7,33 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
+
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down -v",
+    "db:ps": "docker compose ps",
+    "db:logs": "docker compose logs -f",
     "db:seed": "ts-node -P tsconfig.seed.json --transpile-only scripts/seed.ts",
     "migrate:deploy": "prisma migrate deploy",
+    "prisma:gen": "prisma generate",
     "postinstall": "prisma generate",
+
+    "prisma:studio": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma studio",
+    "dev:migrate": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate dev",
+    "dev:deploy": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate deploy",
+    "dev:seed": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed.ts",
+
     "vercel-build": "npm run migrate:deploy && npm run build",
+
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
+
     "db:check": "tsx scripts/db-check.ts",
-    "test": "vitest run"
+    "test": "vitest run --reporter=verbose",
+    "test:cov": "vitest run --coverage",
+    "test:ui": "vitest",
+    "test:watch": "vitest --watch",
+    "pretest:e2e": "cross-env NODE_ENV=test dotenv -e .env.e2e -- prisma generate && cross-env NODE_ENV=test dotenv -e .env.e2e -- prisma migrate reset --force --skip-seed",
+    "test:e2e": "cross-env NODE_ENV=test dotenv -e .env.e2e -- vitest run --reporter=verbose"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -31,11 +50,18 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.0",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^20.19.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.4",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.2.3",
+    "dotenv-cli": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
+    "jsdom": "^27.0.0",
     "prisma": "^6.16.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { CampaignListResponse, ListQuery } from "@/lib/contracts/campaigns";
-import { listCampaigns } from "@/server/campaigns/service";
+import { CampaignListResponse, ListQuery } from "../../../lib/contracts/campaigns";
+import { listCampaigns } from "../../../server/campaigns/service";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);

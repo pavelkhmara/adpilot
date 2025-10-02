@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { RecListResponse } from "@/lib/contracts/recommendations";
-import { listRecommendations } from "@/server/recommendations/service";
+import { RecListResponse } from "../../../lib/contracts/recommendations";
+import { listRecommendations } from "../../../server/recommendations/service";
 
 export async function GET(req: Request) {
   try {

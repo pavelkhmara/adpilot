@@ -18,9 +18,9 @@ import Connections from "../../components/dashboard/Connections";
 import ActionsLog, { type ActionEntry } from "../../components/dashboard/ActionsLog";
 import SettingsModal from "../../components/dashboard/SettingsModal";
 import HotKeysModal from "../../components/dashboard/HotKeysModal";
-import { ConnectionsPanel } from "@/components/connections/ConnectionsPanel";
-import { useRecommendations } from "@/features/campaigns/hooks/fetchRecommendations";
-import { toUiRec, type UiRec } from "@/features/campaigns/mapRecToUi";
+import { ConnectionsPanel } from "../../components/connections/ConnectionsPanel";
+import { useRecommendations } from "../../features/campaigns/hooks/fetchRecommendations";
+import { toUiRec, type UiRec } from "../../features/campaigns/mapRecToUi";
 
 type CampaignRowUI = Omit<CampaignRow, "recommendation"> & { recommendation?: UiRec };
 
