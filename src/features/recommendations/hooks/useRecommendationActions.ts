@@ -22,7 +22,6 @@ export function useRecommendationActions(opts: {
     patchLocal(id, { status: "applied", note });
     const res = await fetch("/api/recommendations/apply", { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
-      // откат, если нужно — можно перезагрузить
       await reload();
     }
   }, [patchLocal, reload]);
