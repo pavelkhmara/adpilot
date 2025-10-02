@@ -1,8 +1,30 @@
-import type { CampaignRow, CampaignStatus, Channel } from "../../../lib/types";
+import type { CampaignLastRec, CampaignRow, CampaignStatus, Channel, UiRecommendation, UiRecType } from "../../../lib/types";
 import type { CampaignListItem, KpiChip } from "../../../lib/contracts/campaigns";
 
 const pickRange = (c: CampaignListItem): KpiChip | undefined =>
   c.d7 ?? c.today ?? c.d30;
+
+const REC_LABEL: Record<string, string> = {
+  pause: 'Pause',
+  scale_up: 'Scale ↑',
+  scale_down: 'Scale ↓',
+  rotate_creative: 'Rotate',
+  reallocate_budget: 'Reallocate',
+};
+
+
+function toRecBadge(rec: { id: string; type: string; priority: number | null} | null | undefined, status: string): CampaignLastRec | null {
+  if (!rec) return null;
+  const type = String(rec.type ?? 'rec');
+  const label = REC_LABEL[type] ?? type.replace(/_/g, ' ');
+  return {
+    id: String(rec.id),
+    type,
+    status: (status ?? 'proposed') as 'proposed' | 'applied' | 'dismissed',
+    priorityScore: rec.priority ?? null,
+    label,
+  };
+}
 
 export function toCampaignRow(c: CampaignListItem): CampaignRow {
   const k = pickRange(c);
@@ -16,6 +38,9 @@ export function toCampaignRow(c: CampaignListItem): CampaignRow {
   const roas = spend > 0 ? revenue / spend : 0;
   const cpc = clicks > 0 ? spend / clicks : undefined;
   const frequency = impressions > 0 ? Math.max(1, impressions / Math.max(clicks, 1)) : 0;
+
+  let latest
+  if (c.latestRecommendation) { latest = toRecBadge(c.latestRecommendation, c.status);}
 
   return {
     id: c.id,
@@ -38,5 +63,7 @@ export function toCampaignRow(c: CampaignListItem): CampaignRow {
     sparkSpend7: c.sparkSpend7,
     sparkConv7: c.sparkConv7,
     sparkRoas7: c.sparkRoas7,
+
+    latestRec: latest ?? null,
   };
 }

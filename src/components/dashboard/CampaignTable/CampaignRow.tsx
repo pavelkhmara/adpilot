@@ -1,6 +1,8 @@
 "use client";
-import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
 import React from "react";
+import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
+import { Badge } from "@/components/UI/Badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../components/UI/tooltip';
 
 
 // export type CampaignRowData = {
@@ -38,7 +40,7 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
 
       <td className="text-left p-3 py-1.5">
         <div className="flex flex-col">
-          <div className="flex">
+          <div className="flex items-center gap-2">
             <button
               className="font-medium hover:underline"
               onClick={() => onOpen(row)}
@@ -46,6 +48,39 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
             >
               {row.name}
             </button>
+
+            {row.latestRec ? (
+              <TooltipProvider>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      className="uppercase tracking-wide"
+                      variant={
+                        row.latestRec.status === 'applied'
+                          ? 'secondary'
+                          : row.latestRec.status === 'dismissed'
+                          ? 'outline'
+                          : 'default' // proposed
+                      }
+                    >
+                      {row.latestRec.type === 'scale_up' ? 'Scale ↑'
+                        : row.latestRec.type === 'scale_down' ? 'Scale ↓'
+                        : row.latestRec.type === 'rotate_creative' ? 'Rotate'
+                        : row.latestRec.type === 'reallocate_budget' ? 'Reallocate'
+                        : row.latestRec.type === 'pause' ? 'Pause'
+                        : row.latestRec.type?.replace(/_/g,' ') || 'Rec'}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <div className="text-xs leading-snug space-y-0.5">
+                      <div><b>Status:</b> {row.latestRec.status}</div>
+                      {!!row.latestRec.priorityScore && <div><b>Priority:</b> {row.latestRec.priorityScore}</div>}
+                      {!!row.latestRec.createdAt && <div><b>Since:</b> {new Date(row.latestRec.createdAt).toLocaleString()}</div>}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
           </div>
           <div className="flex">
             {row.pacing ? (

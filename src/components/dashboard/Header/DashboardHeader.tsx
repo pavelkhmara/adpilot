@@ -1,5 +1,5 @@
 import React from 'react'
-import Badge from '../../../components/UI/Badge'
+import { Badge } from '../../../components/UI/Badge'
 
 // type ClientOption = { id: ClientId; name: string };
 
@@ -19,8 +19,8 @@ export default function DashboardHeader({ readOnly, setSettingsOpen, loadError, 
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-2xl bg-black text-white grid place-items-center font-bold">A</div>
                 <div className="font-semibold">AdPilot</div>
-                <Badge tone="blue">MVP Mock</Badge>
-                {readOnly && <Badge tone="amber">Read-only</Badge>}
+                <Badge variant="outline">MVP Mock</Badge>
+                {readOnly && <Badge variant="destructive">Read-only</Badge>}
             </div>
             <div className="flex items-center gap-2">
                 {!readOnly && (
