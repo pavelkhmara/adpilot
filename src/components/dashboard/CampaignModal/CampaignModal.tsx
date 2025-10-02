@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Kpi from "../Kpi";
 import { fmtInt, fmtMoney, safeStringify } from "../../../lib/utils";
 import Collapsible from "../../../components/UI/Collapsible";
-import Badge from "../../../components/UI/Badge";
+import { Badge } from "../../../components/UI/Badge";
 import { BarChart, Bar, Rectangle, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useRecommendations } from "../../../features/campaigns/hooks/fetchRecommendations";
 import { toUiRec, UiRec } from "../../../features/campaigns/mapRecToUi";
@@ -45,7 +45,7 @@ export type CampaignAction =
 
 
 function RecommendationPill({ rec }: { rec: UiRec }) {
-  if (!rec) return <Badge tone="gray">No recommendations</Badge>;
+  if (!rec) return <Badge variant="default">No recommendations</Badge>;
   const tone =
     rec.type === "scale"
       ? "green"
@@ -54,7 +54,7 @@ function RecommendationPill({ rec }: { rec: UiRec }) {
       : rec.type === "creative"
       ? "amber"
       : "blue";
-  return <Badge tone={tone}>{rec.reason}</Badge>;
+  return <Badge variant="secondary">{rec.reason}</Badge>;
 }
 
 const generateMockSeries = (days: number = 7) => {

@@ -1,5 +1,5 @@
 import React from 'react'
-import Badge from '../UI/Badge'
+import { Badge } from '../UI/Badge'
 import { Channel } from '../../lib/types';
 
 export type ActionEntry = {
@@ -30,7 +30,7 @@ export default function ActionsLog({ entries, onClear, }: { entries: ActionEntry
             {entries.map((a, idx) => (
                 <li key={idx} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                    <Badge tone="blue">{a.action}</Badge>
+                    <Badge variant="outline">{a.action}</Badge>
                     <span className="font-medium">{a.campaign}</span>
                     <span className="text-gray-500">({a.channel})</span>
                     <span className="text-gray-600">— {a.title}</span>

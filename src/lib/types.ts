@@ -70,6 +70,15 @@ export type Recommendation = {
 //   | { kind: "rotate_creatives" }
 //   | null;
 
+export type CampaignLastRec = {
+  id: string;
+  type: string;  
+  status: 'proposed' | 'applied' | 'dismissed';
+  priorityScore?: number | null;
+  createdAt?: string; 
+  label?: string;
+}
+
 export type CampaignRow = {
   id: string;
   name: string;
@@ -99,6 +108,8 @@ export type CampaignRow = {
   sparkSpend7?: number[];
   sparkConv7?: number[];
   sparkRoas7?: number[];
+
+  latestRec?: CampaignLastRec | null;
 };
 
 export type FetchFilters = {
