@@ -7,7 +7,6 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-
     "db:up": "docker compose up -d",
     "db:down": "docker compose down -v",
     "db:ps": "docker compose ps",
@@ -16,18 +15,14 @@
     "migrate:deploy": "prisma migrate deploy",
     "prisma:gen": "prisma generate",
     "postinstall": "prisma generate",
-
     "prisma:studio": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma studio",
     "dev:migrate": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate dev",
     "dev:deploy": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate deploy",
     "dev:seed": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed.ts",
     "dev:seed-recs": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed-recommendations.ts",
-
     "vercel-build": "npm run migrate:deploy && npm run build",
-
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
-
     "db:check": "tsx scripts/db-check.ts",
     "test": "vitest run --reporter=verbose",
     "test:cov": "vitest run --coverage",
@@ -40,6 +35,7 @@
     "@prisma/client": "^6.16.2",
     "@types/papaparse": "^5.3.16",
     "@vercel/speed-insights": "^1.2.0",
+    "lucide-react": "^0.544.0",
     "next": "15.5.4",
     "papaparse": "^5.5.3",
     "react": "19.1.0",
