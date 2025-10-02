@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { RecListResponse } from "../../../lib/contracts/recommendations";
 import { listRecommendations } from "../../../server/recommendations/service";
+import { RecStatus } from "@prisma/client";
 
 export async function GET(req: Request) {
   try {
@@ -9,14 +10,20 @@ export async function GET(req: Request) {
     const cookieClientId = (await cookies()).get("clientId")?.value || null;
     const clientId = searchParams.get("clientId") ?? cookieClientId;
     const campaignId = searchParams.get("campaignId") || undefined;
+    let status = searchParams.get("status") || undefined;
 
     if (!clientId) {
       return NextResponse.json({ error: "clientId is required" }, { status: 400 });
     }
 
+    if (status === "all") {
+      status = undefined;
+    }
+
     const items = await listRecommendations({
     clientId,
     campaignId,
+    status: status as RecStatus,
   });
 
   const payload = RecListResponse.parse({

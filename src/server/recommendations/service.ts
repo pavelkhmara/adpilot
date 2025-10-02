@@ -1,9 +1,10 @@
 import { prisma } from "../../lib/db";
-import type { Prisma, Recommendation as DbRec } from "@prisma/client";
+import type { Prisma, Recommendation as DbRec, RecStatus } from "@prisma/client";
 
 export type RecQuery = {
   clientId: string;
   campaignId?: string;
+  status?: RecStatus;
   limit?: number;
 };
 
@@ -45,6 +46,7 @@ function dbToContract(r: DbRec) {
 export async function listRecommendations(q: RecQuery) {
   const where: Prisma.RecommendationWhereInput = { clientId: q.clientId };
   if (q.campaignId) where.campaignId = q.campaignId;
+  if (q.status) where.status = q.status;
 
   const items = await prisma.recommendation.findMany({
     where,
