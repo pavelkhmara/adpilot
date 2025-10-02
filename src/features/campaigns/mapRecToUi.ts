@@ -1,4 +1,4 @@
-import type { Rec } from "@/lib/contracts/recommendations";
+import type { Rec } from "../../lib/contracts/recommendations";
 
 export type UiRecType = "pause" | "scale" | "creative" | "none";
 export type UiRec = { type: UiRecType; title: string; reason?: string; status?: string; validUntil?: string };

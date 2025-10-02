@@ -14,7 +14,10 @@
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
     "db:check": "tsx scripts/db-check.ts",
-    "test": "vitest run"
+    "test": "vitest run --reporter=verbose",
+    "test:cov": "vitest run --coverage",
+    "test:ui": "vitest",
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
@@ -31,11 +34,15 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.0",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^20.19.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
+    "jsdom": "^27.0.0",
     "prisma": "^6.16.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",

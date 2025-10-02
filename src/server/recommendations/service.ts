@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "../../lib/db";
 import type { Prisma, Recommendation as DbRec } from "@prisma/client";
 
 export type RecQuery = {

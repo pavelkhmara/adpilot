@@ -1,5 +1,5 @@
 "use client";
-import { Channel } from "@/lib/types";
+import { Channel } from "../../lib/types";
 import React, { useMemo } from "react";
 import RecBadge from "../UI/RecBadge";
 

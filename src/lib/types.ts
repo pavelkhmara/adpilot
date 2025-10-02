@@ -1,4 +1,4 @@
-import { UiRec } from "@/features/campaigns/mapRecToUi";
+import { UiRec } from "../features/campaigns/mapRecToUi";
 import { Plan } from "./types";
 export * from "../lib/contracts";
 

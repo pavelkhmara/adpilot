@@ -1,5 +1,4 @@
 "use client";
-import StatusBadge from "@/components/UI/StatusBadge";
 import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
 import React from "react";
 

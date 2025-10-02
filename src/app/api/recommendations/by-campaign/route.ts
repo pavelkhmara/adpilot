@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
-import { Rec } from "@/lib/contracts/recommendations";
+import { Rec } from "../../../../lib/contracts/recommendations";
 
 // export type UiRec = {
 //   campaignId: string;

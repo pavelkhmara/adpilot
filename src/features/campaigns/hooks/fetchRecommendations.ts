@@ -1,4 +1,4 @@
-import { Rec, RecListResponse } from "@/lib/contracts";
+import { Rec, RecListResponse } from "../../../lib/contracts";
 import { useEffect, useState } from "react";
 
 // type ByCampaign = Record<string, Rec | undefined>;
