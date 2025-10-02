@@ -9,6 +9,25 @@ export type Trend = "up" | "down" | "flat";
 
 export type ClientId = string;
 
+export type UiRecStatus = "proposed" | "applied" | "dismissed" | "snoozed";
+export type UiRecType = "pause" | "scale" | "creative" | "other";
+
+export type UiRecommendation = {
+  id: string;
+  clientId: string;
+  campaignId?: string | null;
+
+  type: UiRecType;
+  status: UiRecStatus;
+
+  title: string;
+  reason?: string;
+  note?: string;
+
+  validUntil?: string | null;
+  createdAt: string; 
+  updatedAt: string;
+};
 
 export type Recommendation = {
   id: string;
@@ -77,6 +96,9 @@ export type CampaignRow = {
   recommendation?: Recommendation | UiRec;
   notes?: string[];
   pacing?: { expectedToDate: number; actualToDate: number; delta: number; plan?: Plan | null };
+  sparkSpend7?: number[];
+  sparkConv7?: number[];
+  sparkRoas7?: number[];
 };
 
 export type FetchFilters = {

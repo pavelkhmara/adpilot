@@ -21,6 +21,7 @@ import HotKeysModal from "../../components/dashboard/HotKeysModal";
 import { ConnectionsPanel } from "../../components/connections/ConnectionsPanel";
 import { useRecommendations } from "../../features/campaigns/hooks/fetchRecommendations";
 import { toUiRec, type UiRec } from "../../features/campaigns/mapRecToUi";
+import RecommendationsInbox from "../../features/recommendations/components/RecommendationsInbox";
 
 type CampaignRowUI = Omit<CampaignRow, "recommendation"> & { recommendation?: UiRec };
 
@@ -412,6 +413,8 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
           loading={refreshing}
           onGenerateAction={onGenerateAction}
         />
+
+        <RecommendationsInbox clientId={clientId} />
 
         <ActionsLog entries={audit} onClear={() => setAudit([])} />
       </main>
