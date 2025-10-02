@@ -5,6 +5,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ["tests/**/db.*.test.{ts,tsx}", "node"],
       ["tests/**/api.*.test.{ts,tsx}", "node"],
+      ["tests/**/*.e2e.test.ts", "node"],
     ],
     server: {
       deps: { inline: ["@prisma/client"] },
