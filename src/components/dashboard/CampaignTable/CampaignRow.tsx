@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { CampaignRow as CampaignRowData, Trend } from "../../../lib/types";
 import { Badge } from "@/components/UI/Badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../components/UI/tooltip';
@@ -48,6 +48,16 @@ export function CampaignRow({ row, onOpen, onGenerateAction }: {row: CampaignRow
             >
               {row.name}
             </button>
+
+            {row.isNew && (
+              <Badge
+                variant="secondary"
+                className="animate-pulse bg-emerald-50 text-emerald-700 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]"
+                title="New campaign"
+              >
+                NEW
+              </Badge>
+            )}
 
             {row.latestRec ? (
               <TooltipProvider>

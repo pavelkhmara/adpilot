@@ -1,5 +1,6 @@
 import { prisma } from "../../../../lib/db";
 import { Prisma } from "@prisma/client";
+import { logger } from "../../../../server/debug/logger";
 
 type Incoming = {
   clientId: string;
@@ -30,11 +31,14 @@ function toStringReason(r?: Incoming["reason"]): string {
 export async function POST(req: Request) {
   const body = await req.json();
   const items: Incoming[] = Array.isArray(body) ? body : body?.items ?? [];
+  logger.info("recs.run", "items income {body, items}", { body, items });
 
   const now = new Date();
 
   const data: Prisma.RecommendationCreateManyInput[] = items.map((x) => {
     const level = mapLevel(x.entityType);
+    logger.info("recs.run", "prepare recs data - level", { level });
+
     return {
       clientId: x.clientId,
       channel: x.channel ?? "meta",
@@ -69,6 +73,9 @@ export async function POST(req: Request) {
       // updatedAt — авто
     };
   });
+
+  logger.info("recs.run", "will create recs with data", { data });
+
 
   await prisma.recommendation.createMany({ data });
 

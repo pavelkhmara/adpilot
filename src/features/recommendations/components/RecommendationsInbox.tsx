@@ -144,6 +144,18 @@ export default function RecommendationsInbox({ clientId }: Props) {
                 <span className="ml-auto text-xs opacity-60">{new Date(r.updatedAt).toLocaleString()}</span>
               </div>
               {r.reason && <div className="text-sm opacity-80 mt-1">{r.reason}</div>}
+
+              {r.window && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs rounded bg-emerald-50 text-emerald-700 px-2 py-0.5">
+                    Measured {r.window}
+                  </span>
+                  <span className="text-xs text-emerald-700">
+                    ΔROAS: {Number(r.observedDeltaAbs ?? 0).toFixed(2)}
+                    {" "}({Number(r.observedDeltaRel ?? 0).toFixed(0)}%)
+                  </span>
+                </div>
+              )}
               <div className="flex gap-2 mt-2">
                 {r.status !== "applied" && (
                   <button

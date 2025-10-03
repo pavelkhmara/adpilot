@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { createHash } from "crypto";
+import { logger } from "../../../../server/debug/logger";
 
 type Body = {
   id: string;               // recommendationId
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   const now = new Date();
   const idemKey = makeIdemKey(body.id, until.toISOString(), body.note);
 
+  logger.info("recs.snooze", "before transaction { rec, body }", { rec, body });
   try {
     await prisma.$transaction([
       prisma.recommendationAction.create({
@@ -59,6 +61,7 @@ export async function POST(req: Request) {
       }),
     ]);
 
+    logger.info("recs.snooze", "transaction Snoozed { id }", { id: rec.id });
     return NextResponse.json({
       ok: true,
       status: "proposed",
