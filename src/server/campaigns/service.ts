@@ -61,6 +61,7 @@ export async function listCampaigns(args: ListArgs) {
       channel: true,
       status: true,
       updatedAt: true,
+      createdAt: true,
     },
     orderBy: { updatedAt: "desc" },
     skip: args.offset ?? 0,

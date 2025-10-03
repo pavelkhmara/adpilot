@@ -27,6 +27,10 @@ export type UiRecommendation = {
   validUntil?: string | null;
   createdAt: string; 
   updatedAt: string;
+
+  window?: "T7" | "T14" | "T30"; 
+  observedDeltaAbs?: number; 
+  observedDeltaRel?: number
 };
 
 export type Recommendation = {
@@ -110,6 +114,9 @@ export type CampaignRow = {
   sparkRoas7?: number[];
 
   latestRec?: CampaignLastRec | null;
+
+  isNew?: boolean;
+  newAgeSec?: number;
 };
 
 export type FetchFilters = {

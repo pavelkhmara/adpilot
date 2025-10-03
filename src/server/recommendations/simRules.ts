@@ -1,16 +1,20 @@
 import { prisma } from "../../lib/db";
 import { JsonArray } from "@prisma/client/runtime/library";
 import { headers } from "next/headers";
+import { isDemoOn, throttleWindowMinutes } from "../../server/sim/common";
+import { logger } from "../../server/debug/logger";
 
 type Sum = { spend:number; revenue:number; clicks:number; impressions:number; conv:number; freq:number };
+type DecideOpts = { chaos?: boolean };
 
 function decideActions(sum: {
   spend: number; revenue: number; clicks: number; impressions: number; conv: number; freq: number;
-}) {
+}, opts: DecideOpts = {}) {
+  const chaos = !!opts.chaos;
   const actions: Array<{
     actionType: string;
     payload: Record<string, number>;
-    reason: Record<string, JsonArray | Record<string, number> >;
+    reason: Record<string, JsonArray | Record<string, number | boolean> >;
     priority: number;
   }> = [];
 
@@ -27,32 +31,46 @@ function decideActions(sum: {
     });
   }
 
+  const SCALE_UP_ROAS = chaos ? 1.8 : 2.5;
+  const SCALE_DOWN_ROAS = chaos ? 1.2 : 1.0;
+  const CTR_LOW = chaos ? 0.015 : 0.010;
+  const FREQ_HIGH = chaos ? 3.0 : 3.5;
+
   // scale_down при слабом ROAS
-  if (sum.spend > 100 && roas > 0 && roas < 1.0) {
+  if (sum.spend > 50 && roas >= SCALE_UP_ROAS) {
+    actions.push({
+      actionType: "scale_up",
+      payload: { pct: chaos ? 30 : 20 },
+      reason: { rules: ["roas_good_7d"], details: { roas, chaos } },
+      priority: chaos ? 85 : 80,
+    });
+  }
+
+  if (sum.spend > 100 && roas > 0 && roas < SCALE_DOWN_ROAS) {
     actions.push({
       actionType: "scale_down",
-      payload: { pct: 15 },
-      reason: { rules: ["roas_poor_7d"], details: { roas } },
-      priority: 75,
+      payload: { pct: chaos ? 20 : 15 },
+      reason: { rules: ["roas_poor_7d"], details: { roas, chaos } },
+      priority: chaos ? 80 : 75,
     });
   }
 
   // rotate_creatives при низком CTR
-  if (sum.impressions > 5000 && ctr < 0.01) {
+  if (sum.impressions > 4000 && ctr < CTR_LOW) {
     actions.push({
       actionType: "rotate_creatives",
-      payload: { variants: 2 },
-      reason: { rules: ["ctr_low_7d"], details: { ctr } },
-      priority: 60,
+      payload: { variants: chaos ? 3 : 2 },
+      reason: { rules: ["ctr_low_7d"], details: { ctr, chaos } },
+      priority: chaos ? 65 : 60,
     });
   }
 
   // cap_frequency если зашкаливает частота
-  if (sum.freq >= 3.5) {
+  if (sum.freq >= FREQ_HIGH) {
     actions.push({
       actionType: "cap_frequency",
-      payload: { maxFreq: 3.0 },
-      reason: { rules: ["freq_high_7d"], details: { freq: sum.freq } },
+      payload: { maxFreq: chaos ? 2.8 : 3.0 },
+      reason: { rules: ["freq_high_7d"], details: { freq: sum.freq, chaos } },
       priority: 55,
     });
   }
@@ -85,7 +103,26 @@ async function getBaseUrlFromHeaders() {
   );
 }
 
-export async function emitRecommendationsForCampaign(clientId: string, campaignId: string, baseUrl: string) {
+export async function emitRecommendationsForCampaign(clientId: string, campaignId: string, baseUrl: string, opts: DecideOpts = {}) {
+  if (!isDemoOn()) return { ok: true, demo: "disabled", items: 0 };
+
+  const sinceThrottle = new Date(Date.now() - throttleWindowMinutes() * 60_000);
+  const recent = await prisma.recommendation.findFirst({
+    where: {
+      campaignId,
+      clientId,
+      createdAt: { gte: sinceThrottle },
+      // считаем только «живые/актуальные» рекомендации
+      status: { in: ["proposed"] },
+    },
+    select: { id: true, createdAt: true, status: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recent) {
+    logger.info("emitRecommendationsForCampaign", "throttled", { campaignId, lastId: recent.id });
+    return { ok: true, items: 0, throttled: true, lastId: recent.id };
+  }
+
   // суммируем 7д метрики
   const since = new Date(); since.setUTCHours(0,0,0,0); since.setUTCDate(since.getUTCDate() - 7);
   const rows = await prisma.metricDaily.findMany({
@@ -106,10 +143,11 @@ export async function emitRecommendationsForCampaign(clientId: string, campaignI
   // средняя частота (а не сумма)
   if (rows.length) sum.freq = sum.freq / rows.length;
 
-  const actions = decideActions(sum);
+  const actions = decideActions(sum, opts);
   if (actions.length === 0) return { ok: true, items: 0 };
 
   // фильтр от дублей (по типу action)
+  logger.debug("emitRecommendationsForCampaign", "decideActions", { campaignId, actions: actions.map(a => a.actionType), chaos: !!opts.chaos });
   const filtered: typeof actions = [];
   for (const a of actions) {
     if (!(await recentDuplicateExists(clientId, campaignId, a.actionType))) {
@@ -120,7 +158,6 @@ export async function emitRecommendationsForCampaign(clientId: string, campaignI
 
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { channel: true }});
   const channel = camp?.channel?.toLowerCase().includes("google") ? "google" : "meta";
-
 
   // вызов вашего endpoint'а
   const items = filtered.map(a => ({
@@ -134,6 +171,7 @@ export async function emitRecommendationsForCampaign(clientId: string, campaignI
     priority: a.priority,
   }));
 
+  logger.info("emitRecommendationsForCampaign", "run", { campaignId, items: items.length });
   try {
     await fetch(`${baseUrl}/api/recommendations/run`, {
       method: "POST",
@@ -142,6 +180,7 @@ export async function emitRecommendationsForCampaign(clientId: string, campaignI
     });
     return { ok: true, items: items.length };
   } catch (e) {
+    logger.error("emitRecommendationsForCampaign", "run_failed", { campaignId, error: String(e) });
     console.warn("[simRules] emitRecommendationsForCampaign failed:", e);
     return { ok: false, error: String(e) };
   }

@@ -45,13 +45,32 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
   }
 
   async function disconnect(slug: 'google' | 'meta') {
-  setError(null);
-  const res = await fetch(`/api/connections/${slug}/disconnect?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to disconnect');
-  await load();
-}
+    setError(null);
+    const res = await fetch(`/api/connections/${slug}/disconnect?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Failed to disconnect');
+    await load();
+  }
 
+  async function callAndPing(url: string) {
+    const res = await fetch(url, { method: "POST" });
+    try {
+      const json = await res.json();
+      if (json?.recsEmitted > 0) {
+        window.dispatchEvent(new Event("recs:changed"));
+      }
+    } catch {}
+  }
+
+  const [chaos, setChaos] = useState(false);
+  const [seed, setSeed] = useState<string>("");
+
+  function buildUrl(base: string) {
+    const u = new URL(base, window.location.origin);
+    if (chaos) u.searchParams.set("mode", "chaos");
+    if (seed) u.searchParams.set("seed", seed);
+    return u.pathname + u.search;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,19 +123,25 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
                 </div>
 
                 <div className='flex gap-2'>
-                  <button onClick={async () => {
-                    await fetch(`/api/simulate/seed?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
-                    await load(); // перезагрузим подключения
-                  }} className="px-3 py-1.5 rounded-lg border">Seed demo data</button>
+                  <input
+                    className="pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 w-64"
+                    value={seed}
+                    onChange={e => setSeed(e.target.value)}
+                    placeholder="seed"
+                  />
+                  <button onClick={() => callAndPing(buildUrl(`/api/simulate/seed?clientId=${encodeURIComponent(clientId)}`))} className="px-3 py-1.5 rounded-lg border">Seed demo data</button>
 
-                  <button onClick={async () => {
-                    await fetch(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
-                  }} className="px-3 py-1.5 rounded-lg border">Tick ×1</button>
+                  <button onClick={() => callAndPing(buildUrl(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`))} className="px-3 py-1.5 rounded-lg border">Tick ×1</button>
+
+                  <label className="text-sm flex items-center gap-2">
+                    <input type="checkbox" checked={chaos} onChange={e => setChaos(e.target.checked)} />
+                    Chaos mode
+                  </label>
 
                   <label className="text-sm flex items-center gap-2">
                     <input type="checkbox" onChange={(e) => {
                       if (e.target.checked) {
-                        const id = setInterval(() => fetch(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' }), 20000);
+                        const id = setInterval(() => callAndPing(`/api/simulate/tick?clientId=${encodeURIComponent(clientId)}`), 20000);
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         (window as any).__simTickId = id;
                       } else {

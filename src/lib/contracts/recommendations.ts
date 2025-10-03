@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const ExpectedEffect = z.object({
+    expectedKpi: z.enum(["CPA","ROAS","Spend","Conv"]),
+    expectedDeltaAbs: z.number().nullable(),
+    expectedDeltaRel: z.number().nullable(),
+    horizon: z.enum(["T7","T14","T30"]),
+});
+export type ExpectedEffect = z.infer<typeof ExpectedEffect>;
+
 export const Rec = z.object({
   id: z.string(),
   clientId: z.string(),
@@ -16,12 +24,7 @@ export const Rec = z.object({
   status: z.enum(["proposed","applied","dismissed","expired","failed"]),
   reason: z.string(),
   explanation: z.string().nullable(),
-  expectedEffect: z.object({
-    kpi: z.enum(["CPA","ROAS","Spend","Conv"]),
-    deltaAbs: z.number().nullable(),
-    deltaRel: z.number().nullable(),
-    horizon: z.enum(["T7","T14","T30"]),
-  }),
+  expectedEffect: ExpectedEffect,
   confidence: z.number(),           // 0..1
   urgency: z.enum(["low","med","high"]),
   priorityScore: z.number(),

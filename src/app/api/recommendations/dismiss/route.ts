@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { createHash } from "crypto";
+import { logger } from "../../../../server/debug/logger";
 
 type Body = {
   id: string;              // recommendationId
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Recommendation not found" }, { status: 404 });
   }
 
+  logger.info("recs.dismiss", "before transaction { rec, body }", { rec, body });
   const now = new Date();
   const idemKey = makeIdemKey(body.id, body.reason);
 
@@ -48,6 +50,7 @@ export async function POST(req: Request) {
       }),
     ]);
 
+    logger.info("recs.dismiss", "transaction Dismissed { id }", { id: rec.id });
     return NextResponse.json({ ok: true, status: "dismissed", recommendationId: rec.id });
   } catch (e: unknown) {
     const err = e instanceof Error ? e : new Error(String(e));

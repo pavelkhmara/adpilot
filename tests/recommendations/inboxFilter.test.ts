@@ -8,13 +8,13 @@ describe("filterInbox", () => {
     const future = new Date(now.getTime() + 24*3600*1000).toISOString();
     const items: Rec[] = [
         { id: "1", status: "proposed", validUntil: null,
-            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { kpi: "CPA", deltaAbs: null, deltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
+            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { expectedKpi: "CPA", expectedDeltaAbs: null, expectedDeltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
         },
         { id: "2", status: "dismissed", validUntil: null,
-            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { kpi: "CPA", deltaAbs: null, deltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
+            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { expectedKpi: "CPA", expectedDeltaAbs: null, expectedDeltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
         },
         { id: "3", status: "proposed", validUntil: future,
-            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { kpi: "CPA", deltaAbs: null, deltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
+            clientId: "string", channel: "string", level: "campaign", target: { campaignId: null, adSetId: null, adId: null, creativeId: null, externalId: null, }, type: "string", reason: "string", explanation: null, expectedEffect: { expectedKpi: "CPA", expectedDeltaAbs: null, expectedDeltaRel: null, horizon: "T7", }, confidence: 1, urgency: "high", priorityScore: 1, freshnessAt: null, actionPayload: "", createdBy: "rule", createdAt: "", updatedAt: "",
         },
     ];
     const out = filterInbox(items);

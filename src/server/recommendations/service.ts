@@ -50,6 +50,11 @@ export async function listRecommendations(q: RecQuery) {
 
   const items = await prisma.recommendation.findMany({
     where,
+    include: {
+      effects:{
+        select: { window: true, observedDeltaAbs: true, observedDeltaRel: true },
+      },
+    },
     orderBy: [{ priorityScore: "desc" }, { createdAt: "desc" }],
     take: q.limit ?? 200,
   });

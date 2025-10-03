@@ -20,7 +20,7 @@
     "dev:deploy": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate deploy",
     "dev:seed": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed.ts",
     "dev:seed-recs": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed-recommendations.ts",
-    "vercel-build": "npm run migrate:deploy && npm run build",
+    "vercel-build": "prisma generate && next build",
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
     "db:check": "tsx scripts/db-check.ts",
@@ -32,7 +32,7 @@
     "test:e2e": "cross-env NODE_ENV=test dotenv -e .env.e2e -- vitest run --reporter=verbose"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.2",
+    "@prisma/client": "^6.16.3",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@types/papaparse": "^5.3.16",
@@ -65,7 +65,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "jsdom": "^27.0.0",
-    "prisma": "^6.16.2",
+    "prisma": "^6.16.3",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",

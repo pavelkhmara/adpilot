@@ -128,6 +128,12 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
   useRecommendations(campaignIds, baseFilters.clientId);
     
 
+  useEffect(() => {
+    const handler = () => onRefresh();
+    window.addEventListener("recs:changed", handler);
+    return () => window.removeEventListener("recs:changed", handler);
+  }, [onRefresh]);
+  
   // keep URL in sync
   useUrlSync({
     client: clientId,

@@ -22,7 +22,17 @@ export function useRecommendationActions(opts: {
     patchLocal(id, { status: "applied", note });
     const res = await fetch("/api/recommendations/apply", { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
+      if (res.status === 409) {
+        const x = await res.json().catch(()=>null);
+        let msg = "Действие заблокировано правилами.";
+        if (x?.reason === "cooldown") msg = `Кулдаун активен до ${new Date(x.until).toLocaleString()}`;
+        if (x?.reason === "auto_disallowed") msg = "Автоматическое применение запрещено для этой области.";
+        if (x?.error === "limit_exceeded" && x?.limit?.type === "relative") msg = `Превышен лимит изменения: максимум ${x.limit.maxPct}% в сутки.`;
+        if (x?.error === "limit_exceeded" && x?.limit?.type === "absolute") msg = `Превышен лимит изменения: максимум ${x.limit.max} в сутки.`;
+        return;
+      }
       await reload();
+      return;
     }
   }, [patchLocal, reload]);
 

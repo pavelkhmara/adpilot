@@ -42,6 +42,11 @@ export function toCampaignRow(c: CampaignListItem): CampaignRow {
   let latest
   if (c.latestRecommendation) { latest = toRecBadge(c.latestRecommendation, c.status);}
 
+  const now = Date.now();
+  const createdMs = 0;
+  const ageMs = createdMs ? Math.max(0, now - createdMs) : Number.POSITIVE_INFINITY;
+  const isNew = ageMs <= 5 * 60 * 1000;
+
   return {
     id: c.id,
     name: c.name,
@@ -65,5 +70,8 @@ export function toCampaignRow(c: CampaignListItem): CampaignRow {
     sparkRoas7: c.sparkRoas7,
 
     latestRec: latest ?? null,
+
+    isNew,
+    newAgeSec: isNew ? Math.floor(ageMs / 1000) : undefined,
   };
 }

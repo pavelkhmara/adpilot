@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { UiRecommendation, UiRecStatus } from "../../../lib/types";
 
-const mem = new Map<string, UiRecommendation[]>();
+// const mem = new Map<string, UiRecommendation[]>();
 
-async function fetchRecommendations(clientId: string, status?: UiRecStatus | "all") {
-  const qs = new URLSearchParams({ clientId });
-  if (status && status !== "all") qs.set("status", status);
-  const res = await fetch(`/api/recommendations?${qs.toString()}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to fetch recommendations: ${res.status}`);
-  const data = await res.json() as { items: UiRecommendation[]; generatedAt: string };
-  return data.items;
-}
+// async function fetchRecommendations(clientId: string, status?: UiRecStatus | "all") {
+//   const qs = new URLSearchParams({ clientId });
+//   if (status && status !== "all") qs.set("status", status);
+//   const res = await fetch(`/api/recommendations?${qs.toString()}`, { cache: "no-store" });
+//   if (!res.ok) throw new Error(`Failed to fetch recommendations: ${res.status}`);
+//   const data = await res.json() as { items: UiRecommendation[]; generatedAt: string };
+//   return data.items;
+// }
 
 
 export function useInboxRecommendations(
@@ -32,6 +32,7 @@ export function useInboxRecommendations(
       const json = await res.json();
       if (!res.ok) throw new Error("Failed to load");
       const all: UiRecommendation[] = json.items ?? [];
+
 
       // Клиентская фильтрация — гарантированно
       const filtered = status === "all" ? all : all.filter(r => r.status === status);
