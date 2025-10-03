@@ -20,7 +20,7 @@
     "dev:deploy": "cross-env NODE_ENV=development dotenv -e .env.development.local -- prisma migrate deploy",
     "dev:seed": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed.ts",
     "dev:seed-recs": "cross-env NODE_ENV=development dotenv -e .env.development.local -- tsx prisma/seed-recommendations.ts",
-    "vercel-build": "npm run migrate:deploy && npm run build",
+    "vercel-build": "prisma generate && next build",
     "ctx:full": "node ./make-context-pack.mjs",
     "ctx:diff": "git diff --name-only && node ./make-context-pack.mjs",
     "db:check": "tsx scripts/db-check.ts",
