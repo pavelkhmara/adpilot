@@ -6,7 +6,7 @@ async function main() {
   await prisma.recommendation.create({
     data: {
       clientId: "cmg0y704t00007koc2qbaqlmr",
-      channel: "meta",
+      channel: "meta_ads",
       level: "campaign",
       campaignId: null,
       type: "pause",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../../lib/db";
+import { prisma } from "../../../../../../lib/db";
 import { cookies } from "next/headers";
 
 type Provider = "GOOGLE_ADS" | "META_ADS";
@@ -7,8 +7,8 @@ type Provider = "GOOGLE_ADS" | "META_ADS";
 function normalizeProvider(slug: string | undefined): Provider | null {
   if (!slug) return null;
   const s = slug.toLowerCase();
-  if (s === "google") return "GOOGLE_ADS";
-  if (s === "meta") return "META_ADS";
+  if (s === "google_ads") return "GOOGLE_ADS";
+  if (s === "meta_ads") return "META_ADS";
   return null;
 }
 
@@ -20,7 +20,7 @@ export async function POST(
     const { provider: providerSlug } = await context.params;
     const provider = normalizeProvider(providerSlug);
     if (!provider) {
-      return NextResponse.json({ error: "Unknown provider, expected 'google' or 'meta'" }, { status: 400 });
+      return NextResponse.json({ error: "Unknown provider, expected 'google_ads' or 'meta_ads'" }, { status: 400 });
     }
 
     const { searchParams } = new URL(req.url);

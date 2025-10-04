@@ -24,7 +24,7 @@ function makeRec(input: {
   const now = new Date();
   return {
     clientId: input.clientId,
-    channel: input.channel ?? "meta",
+    channel: input.channel ?? "meta_ads",
     level: "campaign",
     campaignId: input.campaignId ?? null,
     adSetId: null,
@@ -129,7 +129,7 @@ async function main() {
         data.push(
           makeRec({
             clientId,
-            channel: "meta",
+            channel: "meta_ads",
             campaignId: null,
             type: "pause",
             reason: "Seed: account level pause (no campaigns found)",

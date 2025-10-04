@@ -129,7 +129,7 @@ export async function POST(req: Request) {
         const target = subset[0];
         const items = [{
           clientId,
-          channel: "meta",
+          channel: "meta_ads",
           entityType: "campaign",
           campaignId: target.id,
           actionType: Math.random()<0.5 ? "scale_up" : "reallocate_budget",

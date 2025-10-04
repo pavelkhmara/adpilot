@@ -157,7 +157,7 @@ export async function emitRecommendationsForCampaign(clientId: string, campaignI
   if (filtered.length === 0) return { ok: true, items: 0 };
 
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { channel: true }});
-  const channel = camp?.channel?.toLowerCase().includes("google") ? "google" : "meta";
+  const channel = camp?.channel?.toLowerCase().includes("google_ads") ? "google_ads" : "meta_ads";
 
   // вызов вашего endpoint'а
   const items = filtered.map(a => ({

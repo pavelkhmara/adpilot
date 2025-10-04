@@ -97,7 +97,7 @@ export async function createRecommendation(campaignId: string, clientId: string,
     return prisma.recommendation.create({
         data: {
         clientId,
-        channel: "meta",
+        channel: "meta_ads",
         level: "campaign",
         campaignId,
         adSetId: null,
