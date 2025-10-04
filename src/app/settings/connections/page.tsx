@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { ReadonlyURLSearchParams, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "../../../components/UI/card";
 import { Button } from "../../../components/UI/button";
 import { Badge } from "../../../components/UI/Badge";
@@ -16,11 +16,12 @@ import { ToastsProvider, useToasts } from "../../../components/dashboard/Toasts"
 
 
 export default function ConnectionsSettingsPage() {
-  const sp = useSearchParams();
-  const clientId = useMemo(() => sp.get('clientId'), []);
+  
   return (
     <ToastsProvider>
-        <ConnectionsSettingsInner client={clientId} />
+      <Suspense>
+        <ConnectionsSettingsInner />
+      </Suspense>
     </ToastsProvider>
   );
 }
@@ -85,18 +86,18 @@ const statusToBadge: Record<ConnectionStatus, { variant: "default" | "secondary"
   not_connected: { variant: "outline", label: "Not connected" },
 };
 
-function ConnectionsSettingsInner({ client }: { client: string | null }) {
+function ConnectionsSettingsInner() {
   const router = useRouter();
   const { pushToast } = useToasts();
 
   const sp = useSearchParams();
+  const clientId = useMemo(() => sp.get('clientId'), []);
   useEffect(() => {
     const oauth = sp.get('oauth');
     if (oauth === 'ok') pushToast('Connected');
     if (oauth === 'error') pushToast('OAuth error');
   }, [sp]);
 
-  const clientId = useMemo(() => client, []);
 
   const [rows, setRows] = useState<ConnectionListItem[] | null>(null);
   const [loading, setLoading] = useState(true);
