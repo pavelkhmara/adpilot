@@ -22,6 +22,7 @@ import { ConnectionsPanel } from "../../components/connections/ConnectionsPanel"
 import { useRecommendations } from "../../features/campaigns/hooks/fetchRecommendations";
 import { toUiRec, type UiRec } from "../../features/campaigns/mapRecToUi";
 import RecommendationsInbox from "../../features/recommendations/components/RecommendationsInbox";
+import ConnectionsCard from "../../components/dashboard/ConnectionsCard";
 
 type CampaignRowUI = Omit<CampaignRow, "recommendation"> & { recommendation?: UiRec };
 
@@ -36,7 +37,7 @@ export default function ClientDashboard({ clientId }: { clientId: ClientId }) {
   );
 }
 
-// ----- main component (CLIENT, не async!) -----
+// ----- main component (CLIENT, not async!) -----
 function DashboardInner({ clientId }: { clientId: ClientId }) {
   const sp = useSearchParams();
   const { pushToast } = useToasts();
@@ -374,15 +375,17 @@ function DashboardInner({ clientId }: { clientId: ClientId }) {
       />
 
       <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6 text-gray-900 dark:text-gray-100">
-        <ConnectionsPanel clientId={clientId} />
-        <Connections />
+        {/* <ConnectionsPanel clientId={clientId} /> */}
+        {/* <Connections /> */}
+          <section className="grid md:grid-cols-4 sm:grid-cols-2 xs:grid-cols-2 gap-3">
+            <KpiCard label="Spend (period)" value={totals.spend} />
+            <KpiCard label="Revenue (period)" value={totals.revenue} />
+            <KpiCard label="ROAS" value={totals.roas} />
+            <KpiCard label="CPA" value={totals.cpa} />
+          </section>
+          <ConnectionsCard  clientId={clientId} />
+        
 
-        <section className="grid sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Spend (period)" value={totals.spend} />
-          <KpiCard label="Revenue (period)" value={totals.revenue} />
-          <KpiCard label="ROAS" value={totals.roas} />
-          <KpiCard label="CPA" value={totals.cpa} />
-        </section>
 
         <FiltersBar
           channel={channelFilter}

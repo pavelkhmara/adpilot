@@ -12,7 +12,7 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
 
   // modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalProvider, setModalProvider] = useState<'google' | 'meta' | null>(null);
+  const [modalProvider, setModalProvider] = useState<'google_ads' | 'meta_ads' | null>(null);
 
   async function load() {
     setLoading(true);
@@ -31,12 +31,12 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
   }
   useEffect(() => { if (clientId) load(); }, [clientId]);
 
-  function openModal(p: 'google' | 'meta') {
+  function openModal(p: 'google_ads' | 'meta_ads') {
     setModalProvider(p);
     setModalOpen(true);
   }
 
-  async function confirmConnect(p: 'google' | 'meta') {
+  async function confirmConnect(p: 'google_ads' | 'meta_ads') {
     setError(null);
     const res = await fetch(`/api/connections/${p}/demo?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
     const data = await res.json();
@@ -44,7 +44,7 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
     await load();
   }
 
-  async function disconnect(slug: 'google' | 'meta') {
+  async function disconnect(slug: 'google_ads' | 'meta_ads') {
     setError(null);
     const res = await fetch(`/api/connections/${slug}/disconnect?clientId=${encodeURIComponent(clientId)}`, { method: 'POST' });
     const data = await res.json();
@@ -84,7 +84,7 @@ export function ConnectionsPanel({ clientId }: { clientId: string }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((it) => {
           const isConnected = it.status === 'connected';
-          const slug = it.provider === 'GOOGLE_ADS' ? 'google' : 'meta';
+          const slug = it.provider === 'GOOGLE_ADS' ? 'google_ads' : 'meta_ads';
           return (
             <div key={it.provider} className="rounded-2xl border p-4 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div>

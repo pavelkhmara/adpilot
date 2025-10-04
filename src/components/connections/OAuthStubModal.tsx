@@ -5,8 +5,8 @@ import { useState } from 'react';
 type Props = {
   open: boolean;
   onClose: () => void;
-  provider: 'google' | 'meta' | null;
-  onConfirm: (provider: 'google' | 'meta') => Promise<void>;
+  provider: 'google_ads' | 'meta_ads' | null;
+  onConfirm: (provider: 'google_ads' | 'meta_ads') => Promise<void>;
 };
 
 export function OAuthStubModal({ open, onClose, provider, onConfirm }: Props) {
@@ -14,7 +14,7 @@ export function OAuthStubModal({ open, onClose, provider, onConfirm }: Props) {
   const [submitting, setSubmitting] = useState(false);
   if (!open || !provider) return null;
 
-  const title = provider === 'google' ? 'Google Ads' : 'Meta Ads';
+  const title = provider === 'google_ads' ? 'Google Ads' : 'Meta Ads';
 
   async function handleConfirm() {
     setSubmitting(true);

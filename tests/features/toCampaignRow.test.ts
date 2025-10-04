@@ -10,7 +10,7 @@ describe("toCampaignRow adapter", () => {
   const base: CampaignListItem = {
     id: "cmp_1",
     name: "C1",
-    channel: "meta",
+    channel: "meta_ads",
     status: "active",
     today: chip(),
     d7: chip({ spend: 700 }),

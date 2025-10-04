@@ -23,7 +23,7 @@ describe("Campaign contracts", () => {
     const parsed = CampaignListItem.parse({
       id: "cmp_1",
       name: "Test",
-      channel: "meta",
+      channel: "meta_ads",
       status: "active",
       today: chip,
       d7: chip,

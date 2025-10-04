@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     return {
       clientId: x.clientId,
-      channel: x.channel ?? "meta",
+      channel: x.channel ?? "meta_ads",
       level,
       campaignId: level === "campaign" ? x.campaignId ?? null : x.campaignId ?? null,
       adSetId:   level === "adset"    ? x.entityId ?? null : null,

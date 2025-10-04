@@ -66,6 +66,9 @@ enum Provider {
   GOOGLE_ADS
   META_ADS
   GA4
+  TIKTOK
+  LINKEDIN
+  OTHER
 }
 
 enum ConnectionMode {
@@ -76,6 +79,10 @@ enum ConnectionMode {
 enum ConnectionStatus {
   disconnected
   connected
+  needs_reauth
+  syncing
+  error
+  not_connected
 }
 
 model Connection {
@@ -88,11 +95,26 @@ model Connection {
   mode     ConnectionMode   @default(demo)
 
   externalAccountRef String?
+
+  scopes       String[]          // читаемые скоупы для подсказок в UI
+  tokenData    Json?             // безопасный контейнер: refresh/access токены (шифруем/храним вне FE)
+  tokenRefreshedAt DateTime?     // last successful refresh
+  rateLimitUntil   DateTime?     // if provider told us to back off until this time
+  rateLimitInfo    Json?         // debug payload (headers, codes)
+
+  expiresAt    DateTime?
+  lastSyncAt   DateTime?
+  lastError    String?
+
+  accounts     ConnectedAccount[]
+
   createdAt          DateTime @default(now()) @db.Timestamptz
   updatedAt          DateTime @updatedAt @db.Timestamptz
 
   @@index([clientId, provider])
   @@unique([clientId, provider], name: "client_provider_unique")
+  JobQueue JobQueue[]
+  ConnectionEvent ConnectionEvent[]
 }
 
 // --- RECOMMENDATIONS (expanded) ---
@@ -359,4 +381,62 @@ model RecommendationGuard {
   isAutoAllowed      Boolean  @default(true)
 
   @@index([cooldownUntil])
+}
+
+model ConnectedAccount {
+  id               String    @id @default(uuid())
+  connectionId     String
+  connection       Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  externalAccountId String
+  name              String
+  currency          String   @db.Char(3)
+  timezone          String
+  lastImportedAt    DateTime?
+  isActive          Boolean  @default(true)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([connectionId, externalAccountId]) // один и тот же внешний аккаунт не дублируем
+  @@index([connectionId])
+}
+
+model ConnectionEvent {
+  id          String   @id @default(uuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  type        String   // 'connect' | 'reconnect' | 'sync_start' | 'sync_ok' | 'sync_error' | 'token_refresh' | 'error'
+  message     String?
+  createdAt   DateTime @default(now())
+
+  @@index([connectionId, createdAt])
+}
+
+enum JobStatus {
+  queued
+  running
+  done
+  failed
+}
+
+enum JobType {
+  connection_sync
+}
+
+model JobQueue {
+  id            String    @id @default(uuid())
+  type          JobType
+  connectionId  String
+  connection    Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  status        JobStatus  @default(queued)
+  runAt         DateTime   @default(now())
+  attempts      Int        @default(0)
+  lastError     String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([type, status, runAt])
+  @@index([connectionId, status])
 }
