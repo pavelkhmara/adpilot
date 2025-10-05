@@ -1,16 +1,42 @@
 import { prisma } from '../../lib/db';
 
-export async function enqueueSync(connectionId: string, windowMs = 60_000) {
+const PROVIDER_TTL_MS: Record<string, number> = {
+  meta_ads: 60_000,
+  google_ads: 60_000,
+  tiktok: 60_000,
+  linkedin: 60_000,
+  other: 30_000,
+};
+
+export async function enqueueSync(connectionId: string) {
+  const conn = await prisma.connection.findUnique({
+    where: { id: connectionId },
+    select: { id: true, provider: true, lastSyncAt: true },
+  });
+  if (!conn) return { queued: false, reason: 'not_found' } as const;
+
+  const ttl = PROVIDER_TTL_MS[conn.provider] ?? 60_000;
+  const now = Date.now();
+
+  // недавний успешный синк
+  if (conn.lastSyncAt && now - new Date(conn.lastSyncAt).getTime() < ttl) {
+    const remaining = ttl - (now - new Date(conn.lastSyncAt).getTime());
+    return { queued: false, reason: 'cooldown', cooldownMs: remaining } as const;
+  }
+
   // do we already have a queued/running job recently?
   const existing = await prisma.jobQueue.findFirst({
     where: {
       connectionId,
       status: { in: ['queued', 'running'] },
-      runAt: { gte: new Date(Date.now() - windowMs) },
+      runAt: { gte: new Date(now - ttl) },
       type: 'connection_sync',
     },
   });
-  if (existing) return { queued: false, reason: 'already_pending' } as const;
+  if (existing) {
+    const remaining = ttl - (now - new Date(existing.createdAt).getTime());
+    return { queued: false, reason: 'cooldown', cooldownMs: Math.max(0, remaining) } as const;
+  }
 
   await prisma.jobQueue.create({ data: { connectionId, type: 'connection_sync', status: 'queued' } });
   await prisma.connectionEvent.create({ data: { connectionId, type: 'sync_start', message: 'Enqueued' } });

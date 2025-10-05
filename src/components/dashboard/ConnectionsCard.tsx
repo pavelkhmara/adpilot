@@ -49,7 +49,7 @@ function timeAgo(iso: string | null): string {
 const PROVIDER_ICON: Record<string, React.ReactNode> = {
   meta_ads: <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" />, // swap to proper icon if you have one
   google_ads: <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />,
-  tt: <span className="inline-block w-2.5 h-2.5 rounded-full bg-pink-500" />,
+  tiktok: <span className="inline-block w-2.5 h-2.5 rounded-full bg-pink-500" />,
   linkedin: <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-600" />,
   other: <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" />,
 };
@@ -97,7 +97,7 @@ export default function ConnectionsCard({ clientId }: { clientId: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [ clientId ]);
 
   usePolling(() => (async () => {
     try {

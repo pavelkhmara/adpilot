@@ -7,7 +7,7 @@ export function getProviderAdapter(name: string): ProviderAdapter {
     case 'google_ads':
       return GoogleProvider;
     // case 'meta_ads': return MetaProvider;
-    // case 'tt': return TikTokProvider;
+    // case 'tiktok': return TikTokProvider;
     // case 'linkedin': return LinkedInProvider;
     default:
       return MockProvider;
