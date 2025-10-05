@@ -13,8 +13,8 @@ async function getClientIdOrThrow(req: Request): Promise<string> {
   return clientId;
 }
 
-const PROVIDERS_DB: PROVIDER_DB[] = ['META_ADS', 'GOOGLE_ADS', 'TT', 'LINKEDIN', 'OTHER'];
-const providers: Provider[] = ['meta_ads', 'google_ads', 'tt', 'linkedin', 'other'];
+const PROVIDERS_DB: PROVIDER_DB[] = ['META_ADS', 'GOOGLE_ADS', 'TIKTOK', 'LINKEDIN', 'OTHER'];
+const providers: Provider[] = ['meta_ads', 'google_ads', 'tiktok', 'linkedin', 'other'];
 
 type Health = { health: { expiresSoon: boolean; rateLimited: boolean } }
 function makeEmpty() {

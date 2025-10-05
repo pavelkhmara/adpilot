@@ -10,7 +10,7 @@ export type OAuthConfig = {
 export type AuthUrlParams = { provider: string, state: string };
 
 export interface ProviderAdapter {
-  readonly name: 'meta_ads' | 'google_ads' | 'tt' | 'linkedin' | 'other';
+  readonly name: 'meta_ads' | 'google_ads' | 'tiktok' | 'linkedin' | 'other';
   buildAuthUrl(cfg: OAuthConfig, params: AuthUrlParams): string;
   exchangeCode(cfg: OAuthConfig, code: string): Promise<{
     accessToken: string;

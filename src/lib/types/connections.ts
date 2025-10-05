@@ -1,5 +1,5 @@
-export type Provider = 'meta_ads' | 'google_ads' | 'tt' | 'linkedin' | 'other';
-export type PROVIDER_DB = 'META_ADS' | 'GOOGLE_ADS' | 'TT' | 'LINKEDIN' | 'OTHER';
+export type Provider = 'meta_ads' | 'google_ads' | 'tiktok' | 'linkedin' | 'other';
+export type PROVIDER_DB = 'META_ADS' | 'GOOGLE_ADS' | 'TIKTOK' | 'LINKEDIN' | 'OTHER';
 
 export type ConnectionStatus =
   | 'connected'

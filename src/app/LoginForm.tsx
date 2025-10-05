@@ -25,6 +25,8 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
+      
+      localStorage.setItem('clientId', data.clientId);
       // Куки выставятся на ответе роутера → переходим в дашборд
       window.location.href = "/dashboard";
     } catch (e: unknown) {

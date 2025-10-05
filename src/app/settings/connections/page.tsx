@@ -1,12 +1,11 @@
 "use client";
 
-import React, { Suspense, use, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ReadonlyURLSearchParams, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "../../../components/UI/card";
 import { Button } from "../../../components/UI/button";
 import { Badge } from "../../../components/UI/Badge";
-import { Input } from "../../../components/UI/input";
 import { Separator } from "../../../components/UI/separator";
 import type { ConnectionHealth, ConnectionStatus, Provider } from "../../../lib/types/connections";
 import { usePolling } from '../../../lib/hooks/usePolling';
@@ -64,7 +63,7 @@ function timeAgo(iso: string | null): string {
 const PROVIDER_LABEL: Record<Provider, string> = {
   meta_ads: "Meta Ads",
   google_ads: "Google Ads",
-  tt: "TikTok Ads",
+  tiktok: "TikTok Ads",
   linkedin: "LinkedIn Ads",
   other: "Other",
 };
@@ -72,7 +71,7 @@ const PROVIDER_LABEL: Record<Provider, string> = {
 const PROVIDER_ICON: Record<string, React.ReactNode> = {
   meta_ads: <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" />,
   google_ads: <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500" />,
-  tt: <span className="inline-block w-2.5 h-2.5 rounded-full bg-pink-500" />,
+  tiktok: <span className="inline-block w-2.5 h-2.5 rounded-full bg-pink-500" />,
   linkedin: <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-600" />,
   other: <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400" />,
 };
@@ -87,16 +86,15 @@ const statusToBadge: Record<ConnectionStatus, { variant: "default" | "secondary"
 };
 
 function ConnectionsSettingsInner() {
-  const router = useRouter();
   const { pushToast } = useToasts();
 
   const sp = useSearchParams();
-  const clientId = useMemo(() => sp.get('clientId'), []);
+  const clientId = useMemo(() => sp.get('clientId'), [sp]);
   useEffect(() => {
     const oauth = sp.get('oauth');
     if (oauth === 'ok') pushToast('Connected');
     if (oauth === 'error') pushToast('OAuth error');
-  }, [sp]);
+  }, [ sp, pushToast ]);
 
 
   const [rows, setRows] = useState<ConnectionListItem[] | null>(null);
@@ -107,24 +105,25 @@ function ConnectionsSettingsInner() {
   const [logs, setLogs] = useState<{ id: string; type: string; message: string | null; createdAt: string; }[]>([]);
   const [logsCursor, setLogsCursor] = useState<string | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [cooldown, setCooldown] = useState<Record<string, number>>({});
 
-  async function refetch() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/connections/list", { headers: { "x-client-id": clientId || "" } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: { items: ConnectionListItem[] } = await res.json();
-      setRows(data.items);
-    } catch (e: unknown) {
-        const err = e instanceof Error ? e : new Error(String(e));
-      setError(err?.message || "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const refetch = useCallback(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/connections/list", { headers: { "x-client-id": clientId || "" } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: { items: ConnectionListItem[] } = await res.json();
+        setRows(data.items);
+      } catch (e: unknown) {
+          const err = e instanceof Error ? e : new Error(String(e));
+        setError(err?.message || "Failed to load");
+      } finally {
+        setLoading(false);
+      }
+  }, [ clientId])
 
-  useEffect(() => { refetch(); }, []);
+  useEffect(() => { refetch(); }, [refetch]);
   usePolling(() => refetch(), 30_000, true);
 
   async function connect(provider: Provider) {
@@ -154,7 +153,12 @@ function ConnectionsSettingsInner() {
   }
 
   async function syncNow(id: string) {
-    await fetch(`/api/connections/${id}/sync`, { method: "POST", headers: { "x-client-id": clientId || "" } });
+    const res = await fetch(`/api/connections/${id}/sync`, { method: "POST", headers: { "x-client-id": localStorage.getItem("clientId") || clientId || "" } });
+    const data = await res.json();
+    if (data?.reason === 'cooldown' && typeof data.cooldownMs === 'number') {
+      // можно показать тост/хинт и локально запомнить, до какого времени дизейблить
+      setCooldown((prev) => ({ ...prev, [id]: Date.now() + data.cooldownMs }));
+    }
     await refetch();
   }
 
@@ -183,6 +187,12 @@ function ConnectionsSettingsInner() {
     return expiresAt.getTime() - Date.now() <= windowMs;
   }
 
+  function cdLeft(id: string) {
+    const until = cooldown[id];
+    if (!until) return 0;
+    return Math.max(0, until - Date.now());
+  }
+
   return (
     <ToastsProvider>
       <div className="max-w-4xl mt-4 mx-auto space-y-5">
@@ -203,7 +213,7 @@ function ConnectionsSettingsInner() {
             <CardDescription>Быстрый старт. Выберите платформу для подключения.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            {(["meta_ads","google_ads","tt","linkedin","other"] as Provider[]).map((p) => (
+            {(["meta_ads","google_ads","tiktok","linkedin","other"] as Provider[]).map((p) => (
               <Button key={p} variant="secondary" size="sm" onClick={() => connect(p)}>
                 <span className="mr-2">{PROVIDER_ICON[p]}</span>
                 {PROVIDER_LABEL[p]}
@@ -252,7 +262,15 @@ function ConnectionsSettingsInner() {
                             <span className="ml-2 text-xs text-amber-600">Rate limited</span>
                           )}
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => syncNow(row.id)}>Import now</Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => syncNow(row.id)}
+                          disabled={cdLeft(row.id) > 0}
+                          title={cdLeft(row.id) > 0 ? `Wait ${Math.ceil(cdLeft(row.id)/1000)}s` : "Import now"}
+                          >
+                            {cdLeft(row.id) > 0 ? `Wait ${Math.ceil(cdLeft(row.id)/1000)}s` : "Import now"}
+                          </Button>
                         <Button size="sm" variant="outline" onClick={() => refresh(row.id)}>Refresh token</Button>
                         {row.status === "needs_reauth" ? (
                           <Button size="sm" onClick={() => reconnect(row.id)}>Re-connect</Button>

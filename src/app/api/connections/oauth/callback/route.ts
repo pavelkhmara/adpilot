@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   }
 
   // 2) Приводим provider к Prisma enum (из schema.prisma: enum Provider { ... })
-  const PROVIDERS: Provider[] = ['meta_ads', 'google_ads', 'tt', 'linkedin', 'other'];
+  const PROVIDERS: Provider[] = ['meta_ads', 'google_ads', 'tiktok', 'linkedin', 'other'];
   const provider = PROVIDERS.includes(providerParam as Provider) ? (providerParam.toUpperCase() as Prisma.EnumProviderFilter) : "OTHER";
 
   logger.warn("oath callback", "provider", { provider, params: url.searchParams, inPro:  PROVIDERS.includes(providerParam as Provider) })

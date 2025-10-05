@@ -1,7 +1,5 @@
-import { Prisma, RecStatus } from "@prisma/client";
+import { Prisma, RecStatus, Provider } from "@prisma/client";
 import { prisma } from "../../src/lib/db";
-
-const rand = () => Math.random().toString(36).slice(2, 8);
 
 export async function resetSchema() {
   await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "e2e" CASCADE; CREATE SCHEMA "e2e";`);
@@ -131,4 +129,46 @@ export async function createRecommendation(campaignId: string, clientId: string,
         ...data,
         },
     });
+}
+
+
+export async function createConnectionForTests(
+  clientId: string,
+  provider: Provider,
+  data: Partial<Prisma.ConnectionCreateInput> = {}
+) {
+  // 1) Гарантируем, что Client существует (если тест не создал его заранее)
+  const key = "e2e-" + Math.random().toString(36).slice(2, 8);
+  await prisma.client.upsert({
+    where: { id: clientId },                     // <-- уникальный ключ
+    update: {},
+    create: { id: clientId, key, name: key.toUpperCase() }, // <-- можно явно задать id
+    select: { id: true },
+  });
+
+  // 2) Создаём Connection через relation connect (а не прямой clientId)
+  const status = data?.status ?? "connected";
+
+  return prisma.connection.create({
+    data: {
+      id: data?.id,
+      provider,
+      status,
+      scopes: ['test.scope'],
+      client: { connect: { id: clientId } },
+      ...data,
+    },
+    select: { id: true, status: true, clientId: true, provider: true, expiresAt: true, lastSyncAt: true, lastError: true,
+                accounts: {
+                    orderBy: { createdAt: "asc" },
+                }, },
+  });
+}
+
+export async function cleanupClientForTests(clientId: string) {
+  await prisma.jobQueue.deleteMany({ where: { connection: { clientId } } });
+  await prisma.connectionEvent.deleteMany({ where: { connection: { clientId } } });
+  await prisma.connectedAccount.deleteMany({ where: { connection: { clientId } } });
+  await prisma.connection.deleteMany({ where: { clientId } });
+  await prisma.client.deleteMany({ where: { id: clientId } });
 }
